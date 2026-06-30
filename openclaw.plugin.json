@@ -1,0 +1,34 @@
+{
+  "id": "agent-template",
+  "name": "Agent Template",
+  "description": "A reusable OpenClaw template for long-running agent plugins.",
+  "version": "0.1.0",
+  "kind": "capability",
+  "main": "./src/plugin/index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "scratchDir": {
+        "type": "string",
+        "description": "Ephemeral working directory for session state. Leading ~ is expanded at plugin-register time.",
+        "default": "~/.agent-template/scratch"
+      },
+      "outputDir": {
+        "type": "string",
+        "description": "Durable output directory for run artifacts. Leading ~ is expanded at plugin-register time.",
+        "default": "~/.agent-template/output"
+      },
+      "agentName": {
+        "type": "string",
+        "description": "Display name used by the example runner.",
+        "default": "Template Agent"
+      },
+      "defaultDelayMs": {
+        "type": "number",
+        "description": "Default delay between example progress events.",
+        "default": 750
+      }
+    },
+    "additionalProperties": false
+  }
+}

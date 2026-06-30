@@ -1,0 +1,27 @@
+{
+  "name": "openclaw-agent-plugin-template",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "create:plugin": "node scripts/create-plugin.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:plugin": "tsx scripts/test-plugin.ts"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/plugin/index.ts"
+    ]
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@types/node": "^22.16.5",
+    "eslint": "^9.32.0",
+    "globals": "^15.15.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0"
+  }
+}
