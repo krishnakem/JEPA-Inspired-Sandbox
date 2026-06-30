@@ -8,11 +8,11 @@ from pathlib import Path
 
 import numpy as np
 
-from agent.data.generate import default_output_path, write_dataset
+from agent.data.generate import ACTION_FEATURES, STATE_FEATURES, default_output_path, write_dataset
 
 
 def default_model_path() -> Path:
-    return Path("artifacts/models/market_world_model.pt")
+    return Path("agent/artifacts/model.pt")
 
 
 def load_or_create_data(path: Path, samples: int, seed: int) -> dict[str, np.ndarray]:
@@ -34,11 +34,11 @@ def train_model(
     learning_rate: float,
     seed: int,
     samples: int,
-) -> dict[str, list[float]]:
+    json_progress: bool = False,
+) -> dict[str, list[float | int]]:
     try:
         import torch
-        from torch import nn
-        from torch.utils.data import DataLoader, TensorDataset, random_split
+        from torch.utils.data import DataLoader, TensorDataset
 
         from agent.model import MarketWorldModel, save_model
     except ModuleNotFoundError as exc:
@@ -50,65 +50,127 @@ def train_model(
         raise
 
     torch.manual_seed(seed)
-    dataset = load_or_create_data(data_path, samples=samples, seed=seed)
+    try:
+        dataset = load_or_create_data(data_path, samples=samples, seed=seed)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Could not load or generate dataset at {data_path}. "
+            "Run `python -m agent.data.generate` and try again."
+        ) from exc
 
     tensors = TensorDataset(
         torch.from_numpy(dataset["states"]),
         torch.from_numpy(dataset["actions"]),
         torch.from_numpy(dataset["next_states"]),
     )
-
-    train_size = max(1, int(len(tensors) * 0.85))
-    val_size = len(tensors) - train_size
-    if val_size == 0:
-        train_data = tensors
-        val_data = tensors
-    else:
-        train_data, val_data = random_split(
-            tensors,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(seed),
-        )
-
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size)
+    train_loader = DataLoader(
+        tensors,
+        batch_size=batch_size,
+        shuffle=True,
+        generator=torch.Generator().manual_seed(seed),
+    )
 
     model = MarketWorldModel()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    loss_fn = nn.MSELoss()
-    history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
+    metrics: dict[str, list[float | int]] = {
+        "step": [],
+        "epoch": [],
+        "loss": [],
+        "latent_loss": [],
+        "variance_loss": [],
+        "covariance_loss": [],
+        "readout_loss": [],
+        "effective_rank": [],
+    }
+    step = 0
 
     for epoch in range(1, epochs + 1):
         model.train()
-        train_losses = []
-        for state, action, target in train_loader:
-            prediction = model(state, action)
-            loss = loss_fn(prediction, target)
+        epoch_losses = []
+        epoch_ranks = []
+        for state, action, next_state in train_loader:
+            parts = model.training_loss(state, action, next_state)
+            loss = parts["loss"]
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            train_losses.append(float(loss.item()))
+            model.update_target_encoder()
 
-        model.eval()
-        val_losses = []
-        with torch.no_grad():
-            for state, action, target in val_loader:
-                prediction = model(state, action)
-                val_losses.append(float(loss_fn(prediction, target).item()))
+            step += 1
+            loss_value = float(loss.detach())
+            rank_value = float(parts["effective_rank"])
+            epoch_losses.append(loss_value)
+            epoch_ranks.append(rank_value)
 
-        train_loss = float(np.mean(train_losses))
-        val_loss = float(np.mean(val_losses))
-        history["train_loss"].append(train_loss)
-        history["val_loss"].append(val_loss)
-        print(f"epoch={epoch:03d} train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
+            metrics["step"].append(step)
+            metrics["epoch"].append(epoch)
+            metrics["loss"].append(loss_value)
+            metrics["latent_loss"].append(float(parts["latent_loss"]))
+            metrics["variance_loss"].append(float(parts["variance_loss"]))
+            metrics["covariance_loss"].append(float(parts["covariance_loss"]))
+            metrics["readout_loss"].append(float(parts["readout_loss"]))
+            metrics["effective_rank"].append(rank_value)
+
+            if json_progress:
+                print(
+                    json.dumps(
+                        {
+                            "type": "metric",
+                            "step": step,
+                            "epoch": epoch,
+                            "loss": loss_value,
+                            "effective_rank": rank_value,
+                        },
+                        sort_keys=True,
+                    )
+                )
+
+        mean_loss = float(np.mean(epoch_losses))
+        mean_rank = float(np.mean(epoch_ranks))
+        if not json_progress:
+            print(f"epoch={epoch:03d} loss={mean_loss:.6f} effective_rank={mean_rank:.2f}")
 
     save_model(model, model_path)
-    history_path = model_path.with_suffix(".history.json")
-    history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
-    print(f"Saved model to {model_path}")
-    print(f"Saved training history to {history_path}")
-    return history
+
+    artifacts_dir = model_path.parent
+    metrics_path = artifacts_dir / "metrics.json"
+    embeddings_path = artifacts_dir / "embeddings.npy"
+    feature_spec_path = artifacts_dir / "feature_spec.json"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+
+    model.eval()
+    with torch.no_grad():
+        embeddings = model.encode_state(torch.from_numpy(dataset["states"])).cpu().numpy()
+    np.save(embeddings_path, embeddings.astype(np.float32))
+
+    feature_spec = {
+        "state_features": STATE_FEATURES,
+        "action_features": ACTION_FEATURES,
+        "normalization": {
+            "type": "none",
+            "value_range": [0.0, 1.0],
+            "notes": "Synthetic numeric vectors are generated and clipped to [0, 1].",
+        },
+        "dataset": str(data_path),
+        "samples": int(dataset["states"].shape[0]),
+        "seed": seed,
+    }
+    feature_spec_path.write_text(json.dumps(feature_spec, indent=2), encoding="utf-8")
+
+    if json_progress:
+        print(json.dumps({"type": "artifact", "path": str(model_path)}, sort_keys=True))
+        print(json.dumps({"type": "artifact", "path": str(metrics_path)}, sort_keys=True))
+        print(json.dumps({"type": "artifact", "path": str(embeddings_path)}, sort_keys=True))
+        print(json.dumps({"type": "artifact", "path": str(feature_spec_path)}, sort_keys=True))
+    else:
+        print(f"Saved model to {model_path}")
+        print(f"Saved metrics to {metrics_path}")
+        print(f"Saved embeddings to {embeddings_path}")
+        print(f"Saved feature spec to {feature_spec_path}")
+    return metrics
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -120,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=64, help="Training batch size.")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam learning rate.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed.")
+    parser.add_argument(
+        "--json-progress",
+        action="store_true",
+        help="Stream training metrics as JSON objects.",
+    )
     return parser
 
 
@@ -141,6 +208,7 @@ def main() -> None:
             learning_rate=args.learning_rate,
             seed=args.seed,
             samples=args.samples,
+            json_progress=args.json_progress,
         )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
