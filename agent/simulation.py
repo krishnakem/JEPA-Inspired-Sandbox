@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
 from agent.data.generate import ACTION_FEATURES, STATE_FEATURES, evolve_market
+from agent.report import write_report
 
 
 COMPANY_TYPE_PRIORS = {
@@ -252,39 +252,8 @@ def simulate(
     }
 
 
-def write_outputs(result: dict[str, object], output_dir: Path) -> tuple[Path, Path]:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    json_path = output_dir / f"simulation-{stamp}.json"
-    md_path = output_dir / f"simulation-{stamp}.md"
-
-    json_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-
-    inputs = result["inputs"]
-    rounds = result["rounds"]
-    lines = [
-        "# Silicon Sandbox Market Vision",
-        "",
-        f"- company type: {inputs['company_type']}",
-        f"- strategic action: {inputs['strategic_action']}",
-        f"- rounds: {inputs['simulation_rounds']}",
-        f"- mode: {result['mode']}",
-        "",
-        "## Final Market Vision",
-        "",
-        str(result["final_market_vision"]),
-        "",
-        "## Round Trace",
-        "",
-    ]
-    for item in rounds:
-        lines.append(f"### Round {item['round']}")
-        lines.append("")
-        lines.append(str(item["summary"]))
-        lines.append("")
-
-    md_path.write_text("\n".join(lines), encoding="utf-8")
-    return json_path, md_path
+def write_outputs(result: dict[str, object], output_dir: Path, report_format: str) -> Path:
+    return write_report(result, output_dir=output_dir, report_format=report_format)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -296,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--initial-action", help="Alias for the initial strategic action.")
     parser.add_argument("--simulation-rounds", type=int, default=6, help="Number of rounds to run.")
     parser.add_argument("--model", type=Path, help="Optional trained model checkpoint.")
+    parser.add_argument(
+        "--format",
+        choices=["json", "markdown"],
+        default="markdown",
+        help="Report output format.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -325,10 +300,9 @@ def main() -> None:
         company_profile=args.company_profile,
         initial_action=args.initial_action,
     )
-    json_path, md_path = write_outputs(result, args.output_dir)
+    report_path = write_outputs(result, args.output_dir, args.format)
     print(result["final_market_vision"])
-    print(f"Wrote JSON trace to {json_path}")
-    print(f"Wrote Markdown summary to {md_path}")
+    print(f"Wrote {args.format} Market Vision report to {report_path}")
 
 
 if __name__ == "__main__":
