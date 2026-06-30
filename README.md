@@ -18,7 +18,8 @@ repeatable strategic scenario planning.
 ## What this project is
 
 - A local OpenClaw plugin for market scenario simulation.
-- A numeric vector engine: market state is 8 dimensions, action is 5 dimensions.
+- A configurable numeric vector engine with default 8-dimension market state and
+  5-dimension action vectors.
 - A Python-owned JEPA-inspired latent world model.
 - A deterministic report generator using templates, not hosted LLM prose.
 - An artifact-producing sandbox for reports, metrics, embeddings, and plots.
@@ -147,6 +148,36 @@ python -m agent.simulation \
   --format markdown
 ```
 
+Run with a built-in preset and configurable simulation fields:
+
+```bash
+python -m agent.simulation \
+  --preset ai_startup \
+  --current-market "AI coding assistants are growing quickly..." \
+  --company-profile "open-source startup" \
+  --strategic-action "launch a free coding agent" \
+  --rounds 5 \
+  --simulation-style aggressive \
+  --actors startup,incumbent,developers,enterprise_buyers,investors \
+  --shock-events incumbent_price_war,open_source_breakthrough \
+  --objective developer_adoption \
+  --report-format founder_memo
+```
+
+Load a JSON config file:
+
+```bash
+python -m agent.simulation \
+  --config examples/configs/ai_startup.json \
+  --current-market "AI coding assistants are growing quickly..." \
+  --company-profile "open-source startup" \
+  --strategic-action "launch a free coding agent"
+```
+
+Built-in presets are `ai_startup`, `saas_enterprise`, `consumer_tech`, `retail`,
+`manufacturing`, and `fintech`. Config priority is base defaults, then preset,
+then config file, then CLI flags.
+
 Generate diagnostics:
 
 ```bash
@@ -182,7 +213,10 @@ end_session
 }
 ```
 
-The runner launches `python -m agent.simulation` locally and returns the final
+Optional fields include `company_profile`, `preset`, `rounds`,
+`simulation_style`, `actors`, `market_dimensions`, `action_dimensions`,
+`shock_events`, `objective`, and `report_format`. The runner writes a temporary
+config JSON, launches `python -m agent.simulation` locally, and returns the final
 Market Vision report path. It also includes diagnostic plot paths when they are
 available.
 

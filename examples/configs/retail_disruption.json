@@ -1,0 +1,29 @@
+{
+  "market_dimensions": [
+    "consumer_demand",
+    "price_pressure",
+    "supplier_power",
+    "competition_intensity",
+    "margin_health",
+    "brand_trust"
+  ],
+  "action_dimensions": [
+    "price_cut",
+    "partnership",
+    "supply_chain_improvement",
+    "repositioning"
+  ],
+  "actors": [
+    "company",
+    "customers",
+    "suppliers",
+    "incumbent",
+    "investors"
+  ],
+  "industry": "Retail",
+  "rounds": 4,
+  "simulation_style": "capital_constrained",
+  "shock_events": ["supply_chain_disruption"],
+  "objective": "margin_health",
+  "report_format": "risk_report"
+}

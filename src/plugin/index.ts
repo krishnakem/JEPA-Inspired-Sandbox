@@ -93,12 +93,46 @@ function asRequiredString(params: Record<string, unknown>, key: string): string 
     return value.trim();
 }
 
+function asOptionalString(params: Record<string, unknown>, key: string): string | undefined {
+    const value = params[key];
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed || undefined;
+}
+
+function asStringList(params: Record<string, unknown>, key: string): string[] | undefined {
+    const value = params[key];
+    if (typeof value === 'string') {
+        const items = value.split(',').map((item) => item.trim()).filter(Boolean);
+        return items.length ? items : undefined;
+    }
+    if (Array.isArray(value)) {
+        const items = value
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        return items.length ? items : undefined;
+    }
+    return undefined;
+}
+
 function parseRunInput(params: Record<string, unknown>): MarketSimulationInput {
+    const companyType = asOptionalString(params, 'company_type');
+    const companyProfile = asOptionalString(params, 'company_profile');
     return {
         currentMarket: asRequiredString(params, 'current_market'),
-        companyType: asRequiredString(params, 'company_type'),
+        companyType,
+        companyProfile,
         strategicAction: asRequiredString(params, 'strategic_action'),
-        simulationRounds: asPositiveInteger(params.simulation_rounds, 4, 12),
+        simulationRounds: asPositiveInteger(params.rounds ?? params.simulation_rounds, 4, 12),
+        preset: asOptionalString(params, 'preset'),
+        simulationStyle: asOptionalString(params, 'simulation_style'),
+        actors: asStringList(params, 'actors'),
+        marketDimensions: asStringList(params, 'market_dimensions'),
+        actionDimensions: asStringList(params, 'action_dimensions'),
+        shockEvents: asStringList(params, 'shock_events'),
+        objective: asOptionalString(params, 'objective'),
+        reportFormat: asOptionalString(params, 'report_format'),
     };
 }
 
@@ -185,6 +219,10 @@ export function register(api: PluginApi): () => void {
                     type: 'string',
                     description: 'Company type or profile, such as startup, incumbent, platform, or niche vendor.',
                 },
+                company_profile: {
+                    type: 'string',
+                    description: 'Alias for company_type, useful for richer company profile text.',
+                },
                 strategic_action: {
                     type: 'string',
                     description: 'Strategic action to simulate.',
@@ -193,8 +231,56 @@ export function register(api: PluginApi): () => void {
                     type: 'number',
                     description: 'Number of simulation rounds. Defaults to 4, max 12.',
                 },
+                rounds: {
+                    type: 'number',
+                    description: 'Alias for simulation_rounds.',
+                },
+                preset: {
+                    type: 'string',
+                    description: 'Built-in preset, such as ai_startup, saas_enterprise, consumer_tech, retail, manufacturing, or fintech.',
+                },
+                simulation_style: {
+                    type: 'string',
+                    description: 'Simulation style: conservative, base_case, aggressive, chaotic, winner_take_all, regulated, or capital_constrained.',
+                },
+                actors: {
+                    oneOf: [
+                        { type: 'string' },
+                        { type: 'array', items: { type: 'string' } },
+                    ],
+                    description: 'Comma-separated string or array of actor roles.',
+                },
+                market_dimensions: {
+                    oneOf: [
+                        { type: 'string' },
+                        { type: 'array', items: { type: 'string' } },
+                    ],
+                    description: 'Comma-separated string or array of market dimension names.',
+                },
+                action_dimensions: {
+                    oneOf: [
+                        { type: 'string' },
+                        { type: 'array', items: { type: 'string' } },
+                    ],
+                    description: 'Comma-separated string or array of action dimension names.',
+                },
+                shock_events: {
+                    oneOf: [
+                        { type: 'string' },
+                        { type: 'array', items: { type: 'string' } },
+                    ],
+                    description: 'Comma-separated string or array of shock events. Use name@round for explicit timing.',
+                },
+                objective: {
+                    type: 'string',
+                    description: 'Company objective for the scenario, such as developer_adoption.',
+                },
+                report_format: {
+                    type: 'string',
+                    description: 'Narrative format: strategy_memo, founder_memo, investor_memo, board_update, risk_report, or product_brief.',
+                },
             },
-            required: ['session_id', 'current_market', 'company_type', 'strategic_action'],
+            required: ['session_id', 'current_market', 'strategic_action'],
             additionalProperties: false,
         },
         execute: async (_callId, params) => {

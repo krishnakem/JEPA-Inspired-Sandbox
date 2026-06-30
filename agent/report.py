@@ -10,6 +10,7 @@ from typing import Any
 
 SECTION_TITLES = [
     "Summary",
+    "Simulation Configuration",
     "Major Strategic Changes",
     "Competitive Landscape",
     "Likely Winners",
@@ -18,6 +19,15 @@ SECTION_TITLES = [
     "Round-by-Round Evolution",
     "Final Market State",
 ]
+
+REPORT_TITLES = {
+    "strategy_memo": "Silicon Sandbox Strategy Memo",
+    "founder_memo": "Silicon Sandbox Founder Memo",
+    "investor_memo": "Silicon Sandbox Investor Memo",
+    "board_update": "Silicon Sandbox Board Update",
+    "risk_report": "Silicon Sandbox Risk Report",
+    "product_brief": "Silicon Sandbox Product Brief",
+}
 
 
 def _label(feature: str) -> str:
@@ -48,11 +58,35 @@ def _largest_changes(result: dict[str, Any]) -> list[tuple[str, float]]:
 
 
 def _sentence_list(items: list[str]) -> list[str]:
-    return [item.rstrip(".") + "." for item in items]
+    return [item.rstrip(".") + "." for item in items if item]
+
+
+def _state_value(state: dict[str, float], candidates: list[str]) -> str | None:
+    for candidate in candidates:
+        if candidate in state:
+            return f"{_label(candidate)} finishes at {state[candidate]:.2f}"
+    for feature, value in state.items():
+        tokens = set(feature.split("_"))
+        if tokens.intersection(candidates):
+            return f"{_label(feature)} finishes at {value:.2f}"
+    return None
+
+
+def _format_list(values: list[str]) -> str:
+    return ", ".join(_label(value) for value in values) if values else "none"
+
+
+def _format_shocks(config: dict[str, Any], result: dict[str, Any]) -> str:
+    scheduled = result.get("artifact_metadata", {}).get("scheduled_shocks", [])
+    if scheduled:
+        parts = [f"{item['name']} in round {item['round']}" for item in scheduled]
+        return ", ".join(parts)
+    return _format_list(config.get("shock_events", []))
 
 
 def build_report(result: dict[str, Any]) -> dict[str, Any]:
     inputs = result["inputs"]
+    config = result.get("config", {})
     final_state = _final_state(result)
     strongest = _ranked_features(final_state)[0]
     weakest = _ranked_features(final_state, reverse=False)[0]
@@ -60,16 +94,47 @@ def build_report(result: dict[str, Any]) -> dict[str, Any]:
     positive = [item for item in changes if item[1] >= 0]
     negative = [item for item in changes if item[1] < 0]
     rounds = result["rounds"][1:]
+    report_format = config.get("report_format", "strategy_memo")
+    objective = config.get("objective", "market_share")
+    industry = config.get("industry", "AI")
+
+    competitive_signals = [
+        _state_value(final_state, ["competition_intensity", "competition"]),
+        _state_value(final_state, ["platform_power", "platform", "dependency"]),
+        _state_value(final_state, ["price_pressure", "price"]),
+    ]
+
+    risk_intro = "Watch execution risk"
+    if report_format == "risk_report":
+        risk_intro = "Primary risk watchpoint"
+    elif report_format == "founder_memo":
+        risk_intro = "Founder attention should stay on"
+    elif report_format == "investor_memo":
+        risk_intro = "Investor diligence should test"
 
     sections = {
         "Summary": _sentence_list(
             [
                 (
                     f"{inputs['company_type']} tests '{inputs['strategic_action']}' "
-                    f"against a market where {_label(strongest[0])} becomes the strongest signal"
+                    f"in {industry}, where {_label(strongest[0])} becomes the strongest signal"
                 ),
-                f"The main constraint by the final round is {_label(weakest[0])}",
-                f"The simulation used {result['mode']} across {inputs['simulation_rounds']} rounds",
+                f"The objective is {_label(objective)} and the main constraint by the final round is {_label(weakest[0])}",
+                (
+                    f"The simulation used {config.get('simulation_style', 'base_case')} style "
+                    f"across {inputs['simulation_rounds']} rounds in {result['mode']}"
+                ),
+            ]
+        ),
+        "Simulation Configuration": _sentence_list(
+            [
+                f"Industry: {industry}",
+                f"Objective: {_label(objective)}",
+                f"Report format: {_label(report_format)}",
+                f"Active actors: {_format_list(config.get('actors', []))}",
+                f"Shock events: {_format_shocks(config, result)}",
+                f"Market dimensions: {_format_list(config.get('market_dimensions', []))}",
+                f"Action dimensions: {_format_list(config.get('action_dimensions', []))}",
             ]
         ),
         "Major Strategic Changes": _sentence_list(
@@ -81,28 +146,22 @@ def build_report(result: dict[str, Any]) -> dict[str, Any]:
         "Competitive Landscape": _sentence_list(
             [
                 (
-                    "Competitors are likely to respond through pricing and positioning pressure "
-                    "when the company action creates visible adoption momentum"
+                    "Configured actors create pressure through the selected action dimensions "
+                    "rather than a fixed market sequence"
                 ),
-                (
-                    f"Competition intensity finishes at {final_state['competition_intensity']:.2f}, "
-                    f"while platform power finishes at {final_state['platform_power']:.2f}"
-                ),
+                *[item for item in competitive_signals if item],
             ]
         ),
         "Likely Winners": _sentence_list(
             [
                 f"Teams with strength in {_label(strongest[0])} are positioned to compound the shift",
-                "Vendors that pair clear product motion with trust-building distribution should benefit",
+                f"Operators that connect the action mix to {_label(objective)} should benefit most",
             ]
         ),
         "Likely Risks": _sentence_list(
             [
-                f"Weakness in {_label(weakest[0])} could slow conversion or expansion",
-                (
-                    "A competitor response can compress margins if price pressure and competition "
-                    "rise together"
-                ),
+                f"{risk_intro} {_label(weakest[0])}",
+                "A strong actor response can compress the advantage if pressure rises faster than trust or adoption",
             ]
             + [
                 f"Watch {_label(feature)} because it moved down by {abs(delta):.2f}"
@@ -134,8 +193,9 @@ def build_report(result: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "title": "Silicon Sandbox Market Vision",
+        "title": REPORT_TITLES.get(report_format, "Silicon Sandbox Market Vision"),
         "inputs": inputs,
+        "config": config,
         "mode": result["mode"],
         "sections": sections,
         "final_market_vision": result["final_market_vision"],
@@ -144,12 +204,17 @@ def build_report(result: dict[str, Any]) -> dict[str, Any]:
 
 def render_markdown(report: dict[str, Any]) -> str:
     inputs = report["inputs"]
+    config = report.get("config", {})
     lines = [
         f"# {report['title']}",
         "",
         f"- company type: {inputs['company_type']}",
         f"- strategic action: {inputs['strategic_action']}",
         f"- rounds: {inputs['simulation_rounds']}",
+        f"- industry: {config.get('industry', 'AI')}",
+        f"- objective: {_label(config.get('objective', 'market_share'))}",
+        f"- simulation style: {config.get('simulation_style', 'base_case')}",
+        f"- report format: {_label(config.get('report_format', 'strategy_memo'))}",
         f"- mode: {report['mode']}",
         "",
     ]

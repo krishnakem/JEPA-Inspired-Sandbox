@@ -6,7 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from agent.config import SimulationConfig, load_config_file, merge_config
 from agent.data.generate import write_dataset
+from agent.presets import preset_config
 from agent.report import SECTION_TITLES, write_report
 from agent.simulation import simulate
 
@@ -65,6 +67,87 @@ class PipelineTest(unittest.TestCase):
             self.assertTrue((model_path.parent / "metrics.json").exists())
             self.assertTrue(trained_report.exists())
             self.assert_report_sections(trained_report)
+
+    def test_default_config_loads(self) -> None:
+        config = SimulationConfig()
+        self.assertEqual(config.market_dimensions[0], "demand_growth")
+        self.assertEqual(config.action_dimensions[-1], "repositioning")
+        self.assertEqual(config.report_format, "strategy_memo")
+
+    def test_custom_config_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            path.write_text(
+                """
+                {
+                  "market_dimensions": ["developer_adoption", "enterprise_trust"],
+                  "action_dimensions": ["open_source_release", "enterprise_push"],
+                  "actors": ["startup", "developers"],
+                  "rounds": 3,
+                  "simulation_style": "aggressive",
+                  "objective": "developer_adoption",
+                  "report_format": "founder_memo"
+                }
+                """,
+                encoding="utf-8",
+            )
+            config = load_config_file(path)
+        self.assertEqual(config.market_dimensions, ["developer_adoption", "enterprise_trust"])
+        self.assertEqual(config.rounds, 3)
+
+    def test_preset_and_cli_override_priority(self) -> None:
+        config = preset_config("ai_startup")
+        config = merge_config(
+            config,
+            {"rounds": 2, "simulation_style": "regulated", "report_format": "risk_report"},
+            source="test overrides",
+        )
+        self.assertEqual(config.industry, "AI")
+        self.assertEqual(config.rounds, 2)
+        self.assertEqual(config.simulation_style, "regulated")
+        self.assertEqual(config.report_format, "risk_report")
+
+    def test_custom_dimensions_actors_shocks_and_report_format(self) -> None:
+        config = SimulationConfig(
+            market_dimensions=[
+                "developer_adoption",
+                "enterprise_trust",
+                "open_source_momentum",
+                "margin_health",
+            ],
+            action_dimensions=[
+                "open_source_release",
+                "enterprise_push",
+                "price_cut",
+            ],
+            actors=["startup", "incumbent", "developers"],
+            industry="AI",
+            rounds=3,
+            simulation_style="aggressive",
+            shock_events=["open_source_breakthrough@2"],
+            objective="developer_adoption",
+            report_format="founder_memo",
+        )
+        result = simulate(
+            current_market="AI coding assistants are growing with open source developer interest",
+            company_type="startup",
+            strategic_action="launch an open source release with developer marketing",
+            model_path=None,
+            config=config,
+        )
+
+        self.assertEqual(result["config"]["report_format"], "founder_memo")
+        self.assertEqual(list(result["rounds"][-1]["updated_market_state"]), config.market_dimensions)
+        self.assertEqual(list(result["action_vector"]), config.action_dimensions)
+        self.assertEqual([round_["actor"] for round_ in result["rounds"][1:]], config.actors)
+        self.assertEqual(result["rounds"][2]["shocks"][0]["name"], "open_source_breakthrough")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = write_report(result, Path(tmp), "markdown")
+            text = report_path.read_text(encoding="utf-8")
+        self.assertIn("# Silicon Sandbox Founder Memo", text)
+        self.assertIn("## Simulation Configuration", text)
+        self.assertIn("developer adoption", text)
 
 
 if __name__ == "__main__":

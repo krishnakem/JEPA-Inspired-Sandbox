@@ -1,0 +1,32 @@
+{
+  "market_dimensions": [
+    "developer_adoption",
+    "enterprise_trust",
+    "switching_cost",
+    "open_source_momentum",
+    "platform_dependency",
+    "regulatory_risk",
+    "margin_health",
+    "adoption_rate"
+  ],
+  "action_dimensions": [
+    "open_source_release",
+    "enterprise_push",
+    "price_cut",
+    "developer_marketing",
+    "partnership"
+  ],
+  "actors": [
+    "startup",
+    "incumbent",
+    "developers",
+    "enterprise_buyers",
+    "investors"
+  ],
+  "industry": "AI",
+  "rounds": 5,
+  "simulation_style": "aggressive",
+  "shock_events": ["incumbent_price_war", "open_source_breakthrough"],
+  "objective": "developer_adoption",
+  "report_format": "founder_memo"
+}

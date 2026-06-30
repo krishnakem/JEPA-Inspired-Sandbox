@@ -9,9 +9,18 @@ import { type AgentRunResult, type AgentRunner, throwIfAborted } from './AgentRu
 
 export interface MarketSimulationInput {
     currentMarket: string;
-    companyType: string;
+    companyType?: string;
+    companyProfile?: string;
     strategicAction: string;
-    simulationRounds: number;
+    simulationRounds?: number;
+    preset?: string;
+    simulationStyle?: string;
+    actors?: string[];
+    marketDimensions?: string[];
+    actionDimensions?: string[];
+    shockEvents?: string[];
+    objective?: string;
+    reportFormat?: string;
 }
 
 interface ProcessResult {
@@ -43,9 +52,11 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         const startedAt = Date.now();
         this.session.events.emit('run-started', {
             current_market: input.currentMarket,
-            company_type: input.companyType,
+            company_type: input.companyType ?? input.companyProfile ?? 'startup',
             strategic_action: input.strategicAction,
-            simulation_rounds: input.simulationRounds,
+            simulation_rounds: input.simulationRounds ?? null,
+            preset: input.preset ?? null,
+            simulation_style: input.simulationStyle ?? null,
         });
 
         try {
@@ -91,29 +102,41 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         }
     }
 
-    private runPythonSimulation(
+    private async runPythonSimulation(
         input: MarketSimulationInput,
         reportsDir: string,
         signal: AbortSignal
     ): Promise<ProcessResult> {
         const python = process.env.PYTHON ?? 'python3';
+        const configPath = await this.writeGeneratedConfig(input, reportsDir);
         const args = [
             '-m',
             'agent.simulation',
             '--current-market',
             input.currentMarket,
-            '--company-type',
-            input.companyType,
             '--strategic-action',
             input.strategicAction,
-            '--simulation-rounds',
-            String(input.simulationRounds),
             '--format',
             'markdown',
             '--json-progress',
             '--output-dir',
             reportsDir,
         ];
+        if (input.companyType) {
+            args.push('--company-type', input.companyType);
+        }
+        if (input.companyProfile) {
+            args.push('--company-profile', input.companyProfile);
+        }
+        if (input.preset) {
+            args.push('--preset', input.preset);
+        }
+        if (configPath) {
+            args.push('--config', configPath);
+        }
+        if (input.simulationRounds) {
+            args.push('--simulation-rounds', String(input.simulationRounds));
+        }
 
         return new Promise((resolve, reject) => {
             const child = spawn(python, args, {
@@ -181,6 +204,27 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
                 resolve({ stdout, stderr, reportPath });
             });
         });
+    }
+
+    private async writeGeneratedConfig(
+        input: MarketSimulationInput,
+        reportsDir: string
+    ): Promise<string | null> {
+        const config: Record<string, unknown> = {};
+        if (input.simulationRounds) config.rounds = input.simulationRounds;
+        if (input.simulationStyle) config.simulation_style = input.simulationStyle;
+        if (input.actors?.length) config.actors = input.actors;
+        if (input.marketDimensions?.length) config.market_dimensions = input.marketDimensions;
+        if (input.actionDimensions?.length) config.action_dimensions = input.actionDimensions;
+        if (input.shockEvents?.length) config.shock_events = input.shockEvents;
+        if (input.objective) config.objective = input.objective;
+        if (input.reportFormat) config.report_format = input.reportFormat;
+
+        if (Object.keys(config).length === 0) return null;
+
+        const configPath = path.join(reportsDir, `generated-simulation-config-${Date.now()}.json`);
+        await fsp.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
+        return configPath;
     }
 
     private async findNewestReport(reportsDir: string): Promise<string | null> {
