@@ -1,186 +1,120 @@
 # JEPA-Inspired Silicon Sandbox
 
-JEPA-Inspired Silicon Sandbox is an OpenClaw plugin for local market vision
-forecasting. The user describes a market, a company type, a strategic action,
-and a number of simulation rounds. The plugin then simulates how that market
-could evolve round by round after the action, ending with a structured final
-market vision.
+A JEPA-inspired OpenClaw plugin exploring latent world models for multi-round
+strategic market forecasting.
 
-This is not primarily a machine learning demo. The product goal is a portfolio
-quality forecasting MVP for exploring strategic market futures. The
-JEPA-inspired architecture is the implementation technique used to keep the
-simulation modular, inspectable, and repeatable.
+## Vision
 
-## Product Goal
+JEPA-Inspired Silicon Sandbox is a local market-vision forecasting MVP. A user
+describes a current market, a company profile, a strategic action, and a number
+of rounds. The system rolls the market forward through company action,
+competitor response, customer reaction, and investor/regulator pressure, then
+returns a structured Market Vision report.
 
-The MVP should answer questions like:
+The goal is not to predict public-market returns. This is not financial advice.
+It is a portfolio project for exploring how latent world models can support
+repeatable strategic scenario planning.
 
-```text
-If a mid-market B2B SaaS company enters the AI sales-assistant market by
-launching an open ecosystem strategy, what might the market look like after
-six competitive response cycles?
-```
+## What this project is
 
-The intended user input is:
+- A local OpenClaw plugin for market scenario simulation.
+- A numeric vector engine: market state is 8 dimensions, action is 5 dimensions.
+- A Python-owned JEPA-inspired latent world model.
+- A deterministic report generator using templates, not hosted LLM prose.
+- An artifact-producing sandbox for reports, metrics, embeddings, and plots.
+- A local-only system with no OpenAI, Anthropic, or hosted model API calls.
 
-| Input | Meaning |
-| --- | --- |
-| `current_market` | The market as it exists now, including players, demand, constraints, and trends. |
-| `company_type` | The kind of company making the move, such as startup, incumbent, platform, or niche vendor. |
-| `strategic_action` | The action to simulate, such as price cut, partnership, product launch, acquisition, or repositioning. |
-| `simulation_rounds` | How many market evolution rounds to run. |
+## What this project is not
 
-The intended output is:
+- Not financial advice or an investment recommendation engine.
+- Not a full reproduction of Meta JEPA.
+- Not an LLM wrapper.
+- Not a hosted API product.
+- Not a claim that synthetic market dynamics are real market truth.
 
-- a round-by-round market evolution trace
-- an internal representation of the market state at each round
-- predicted changes in competitors, customers, pricing, positioning, and risk
-- a final market vision summary
-- local artifacts that can be inspected after the run
+## Why latent world models
 
-## Core Loop
+Multi-round strategy is naturally stateful. A market move changes demand,
+competition, trust, pricing pressure, regulation, margins, and adoption. The
+next round should start from that changed world, not from the original prompt.
 
-```text
-Current Market State
--> Internal Market Representation
--> Strategic Action
--> Predicted Future Market Representation
--> Repeat
--> Final Market Vision
-```
+This project keeps that world state in numeric latent form. Text is only the
+input/output adapter: keyword encoding on the way in, deterministic templates on
+the way out.
 
-OpenClaw owns the user-facing orchestration:
+## Why JEPA-inspired
 
-- session lifecycle
-- tool registration
-- progress events
-- cancellation
-- status polling
-- artifact paths
+The model predicts future latent representations rather than reconstructing raw
+market vectors as its main objective. The implementation includes:
 
-Python will own the market model:
+- online encoder for current market state
+- target encoder with stop-gradient targets
+- action-conditioned latent predictor
+- variance and covariance collapse guards
+- effective-rank diagnostics
+- readout decoder used only to display state vectors
 
-- parsing market inputs into a latent representation
-- applying strategic actions
-- evolving the representation over multiple rounds
-- producing structured forecasts
-- writing simulation artifacts
+That is JEPA-inspired, but intentionally small and local.
 
-TypeScript should remain the OpenClaw boundary. Python should contain the
-forecasting logic so the market model can stay easy to test and iterate on.
-
-## Local-Only Constraint
-
-Everything must run locally.
-
-The project should not call OpenAI, Anthropic, hosted LLMs, or external model
-APIs. Any intelligence in the MVP should come from deterministic simulation
-logic, local algorithms, lightweight local models, or explicit rules that live
-in this repository.
-
-That constraint is part of the product: a user should be able to install the
-plugin, run a simulation, inspect the generated artifacts, and understand how
-the forecast was produced.
-
-## Planned Tool Surface
-
-The current repository still contains the reusable OpenClaw agent scaffold. As
-the project becomes the Silicon Sandbox, the primary run tool should move from
-template parameters to market forecasting parameters.
-
-Planned canonical flow:
+## Architecture
 
 ```text
-start_session
--> run_market_simulation
--> get_session_status
--> end_session
+OpenClaw / TypeScript
+  src/plugin/index.ts
+    start_session, run_market_simulation, status, cancellation, reset
+  src/main/JepaInspiredSiliconSandboxRunner.ts
+    spawns the local Python simulator and streams progress events
+
+Python engine
+  agent/data/generate.py
+    numeric dataset and readable JSONL sidecar
+  agent/model.py
+    JEPA-inspired latent predictor
+  agent/train.py
+    training loop and standardized artifacts
+  agent/simulation.py
+    multi-round market rollout
+  agent/report.py
+    deterministic JSON/Markdown Market Vision reports
+  agent/plot.py
+    developer diagnostics
+
+Artifacts
+  agent/artifacts/
 ```
 
-Planned `run_market_simulation` input:
+Python owns the model and simulation. TypeScript only orchestrates the local
+process for OpenClaw.
 
-```json
-{
-  "session_id": "session returned by start_session",
-  "current_market": "Description of the current market",
-  "company_type": "Type of company taking action",
-  "strategic_action": "Strategic move to simulate",
-  "simulation_rounds": 6
-}
+## Example simulation
+
+```bash
+python -m agent.simulation \
+  --current-market "AI coding assistants are rapidly growing and competitive" \
+  --company-type startup \
+  --strategic-action "launch a free coding agent" \
+  --simulation-rounds 4 \
+  --format markdown
 ```
 
-The existing lifecycle tools should remain useful:
+If your system does not provide a `python` alias, use `python3` for the same
+commands.
 
-| Tool | Purpose |
-| --- | --- |
-| `start_session` | Create a local simulation session and return a `session_id`. |
-| `run_market_simulation` | Start the market forecast in the background. |
-| `get_session_status` | Poll progress, recent events, result, errors, and artifact paths. |
-| `stop_run` | Cancel an in-flight simulation cooperatively. |
-| `reset_all` | Clear local scratch and output data after confirmation. |
-| `end_session` | Abort active work and forget the session. |
+## Installation
 
-## Intended Architecture
-
-```text
-src/plugin/
-  index.ts
-    OpenClaw register(api), tool schemas, session orchestration
-
-src/core/
-  AgentSession.ts
-    Session id, scratch/output directories, event stream, abort signal
-
-src/main/
-  MarketSimulationRunner.ts
-    TypeScript runner that launches local Python simulation code
-
-python/
-  silicon_sandbox/
-    market_state.py
-      Market representation and validation
-    actions.py
-      Strategic action modeling
-    simulator.py
-      Multi-round market evolution loop
-    artifacts.py
-      Markdown and JSON artifact writing
-```
-
-The JEPA-inspired shape should stay understandable:
-
-- encode the current market into an internal representation
-- condition on the strategic action
-- predict a future representation
-- compare and carry forward the representation
-- repeat for the requested number of rounds
-- decode the final representation into a market vision
-
-## Current Repository State
-
-This repo currently starts from an OpenClaw long-running agent plugin template.
-It already has useful infrastructure:
-
-- TypeScript plugin registration
-- background run lifecycle
-- event buffering
-- status polling
-- cooperative cancellation
-- local output artifacts
-- local smoke test
-
-The next implementation step is to replace the template runner with the market
-simulation runner and add the Python model package.
-
-## Development
-
-Install dependencies:
+Install JavaScript dependencies:
 
 ```bash
 npm install
 ```
 
-Run local checks:
+Install Python dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Run checks:
 
 ```bash
 npm run typecheck
@@ -188,18 +122,94 @@ npm run lint
 npm run test:plugin
 ```
 
-The current smoke test imports the plugin, registers tools against a fake
-OpenClaw API, starts a session, runs the template agent, polls for completion,
-and ends the session. It should be updated as soon as the market simulation
-tool replaces the template runner.
+## Standalone Python usage
 
-## OpenClaw Install
-
-Install this repo as a linked plugin from your OpenClaw environment:
+Generate the numeric dataset and readable JSONL sidecar:
 
 ```bash
-openclaw plugins install /absolute/path/to/this/repo --link
+python -m agent.data.generate --samples 200
 ```
 
-Restart the OpenClaw gateway after source edits. Linked plugins are picked up on
-gateway boot; they are not hot-reloaded while the gateway is running.
+Train the JEPA-inspired model:
+
+```bash
+python -m agent.train --epochs 5
+```
+
+Run a market simulation and write a report:
+
+```bash
+python -m agent.simulation \
+  --current-market "AI coding assistants are rapidly growing and competitive" \
+  --company-type startup \
+  --strategic-action "launch a free coding agent" \
+  --simulation-rounds 4 \
+  --format markdown
+```
+
+Generate diagnostics:
+
+```bash
+python -m agent.plot
+```
+
+## OpenClaw usage
+
+Install this repo as a linked OpenClaw plugin:
+
+```bash
+openclaw plugins install /absolute/path/to/JEPA-Inspired-Sandbox --link
+```
+
+Canonical tool flow:
+
+```text
+start_session
+run_market_simulation
+get_session_status
+end_session
+```
+
+`run_market_simulation` expects:
+
+```json
+{
+  "session_id": "session returned by start_session",
+  "current_market": "AI coding assistants are rapidly growing and competitive",
+  "company_type": "startup",
+  "strategic_action": "launch a free coding agent",
+  "simulation_rounds": 4
+}
+```
+
+The runner launches `python -m agent.simulation` locally and returns the final
+Market Vision report path. It also includes diagnostic plot paths when they are
+available.
+
+## Generated artifacts
+
+All Python artifacts live under `agent/artifacts/`.
+
+```text
+agent/artifacts/data/market_transitions.npz
+agent/artifacts/data/market_transitions.json
+agent/artifacts/data/market_transitions.jsonl
+agent/artifacts/model.pt
+agent/artifacts/metrics.json
+agent/artifacts/embeddings.npy
+agent/artifacts/feature_spec.json
+agent/artifacts/simulations/market-vision-*.md
+agent/artifacts/simulations/market-vision-*.json
+agent/artifacts/plots/latent_trajectory.png
+agent/artifacts/plots/effective_rank.png
+agent/artifacts/plots/collapse_comparison.png
+```
+
+## Future roadmap
+
+- Add richer deterministic text adapters for market descriptions.
+- Expand the synthetic transition generator with more industry-specific regimes.
+- Add validation sets and stronger collapse/robustness gates.
+- Improve OpenClaw progress events if the Python simulator gains JSON progress.
+- Add richer report comparisons across multiple strategic actions.
+- Package a small demo dataset and screenshots for portfolio presentation.
