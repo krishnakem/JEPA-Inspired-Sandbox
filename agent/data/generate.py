@@ -27,9 +27,32 @@ ACTION_FEATURES = [
     "repositioning",
 ]
 
+INDUSTRIES = [
+    "AI",
+    "SaaS",
+    "Consumer Technology",
+    "Retail",
+    "Manufacturing",
+]
+
+TRANSITION_TYPES = [
+    "product launch",
+    "price cut",
+    "open-source release",
+    "enterprise expansion",
+    "regulatory pressure",
+    "competitor response",
+    "customer adoption shift",
+    "supply chain improvement",
+]
+
 
 def default_output_path() -> Path:
-    return Path("artifacts/data/market_transitions.npz")
+    return Path("agent/artifacts/data/market_transitions.npz")
+
+
+def default_jsonl_path() -> Path:
+    return Path("agent/artifacts/data/market_transitions.jsonl")
 
 
 def sample_states(rng: np.random.Generator, count: int) -> np.ndarray:
@@ -104,6 +127,80 @@ def generate_dataset(samples: int, seed: int) -> dict[str, np.ndarray]:
     }
 
 
+def _feature_phrase(features: list[str], values: np.ndarray, high_label: str, low_label: str) -> str:
+    high_index = int(np.argmax(values))
+    low_index = int(np.argmin(values))
+    high_name = features[high_index].replace("_", " ")
+    low_name = features[low_index].replace("_", " ")
+    return (
+        f"{high_label} {high_name} at {values[high_index]:.2f}; "
+        f"{low_label} {low_name} at {values[low_index]:.2f}"
+    )
+
+
+def render_market_state(state: np.ndarray) -> str:
+    return _feature_phrase(STATE_FEATURES, state, "strongest", "softest")
+
+
+def render_company_action(action: np.ndarray) -> str:
+    primary_index = int(np.argmax(action))
+    primary_name = ACTION_FEATURES[primary_index].replace("_", " ")
+    active = [
+        f"{name.replace('_', ' ')} {value:.2f}"
+        for name, value in zip(ACTION_FEATURES, action)
+        if value >= 0.1
+    ]
+    if not active:
+        return "no material action"
+    return f"primary {primary_name}; mix: {', '.join(active)}"
+
+
+def choose_industry(state: np.ndarray, action: np.ndarray, index: int, seed: int) -> str:
+    signal = int(round(float((state.sum() + action.sum()) * 100)))
+    return INDUSTRIES[(signal + index + seed) % len(INDUSTRIES)]
+
+
+def choose_transition_type(state: np.ndarray, action: np.ndarray, next_state: np.ndarray) -> str:
+    primary_action = int(np.argmax(action))
+    delta = next_state - state
+    if state[5] > 0.68 or delta[5] > 0.04:
+        return "regulatory pressure"
+    if delta[2] > 0.07:
+        return "competitor response"
+    if delta[7] > 0.07:
+        return "customer adoption shift"
+    if delta[6] > 0.05:
+        return "supply chain improvement"
+    return TRANSITION_TYPES[primary_action]
+
+
+def write_jsonl_sidecar(
+    path: Path,
+    dataset: dict[str, np.ndarray],
+    seed: int,
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for index, (state, action, next_state) in enumerate(
+            zip(dataset["states"], dataset["actions"], dataset["next_states"])
+        ):
+            record = {
+                "current_market_state": render_market_state(state),
+                "company_action": render_company_action(action),
+                "future_market_state": render_market_state(next_state),
+                "industry": choose_industry(state, action, index=index, seed=seed),
+                "transition_type": choose_transition_type(state, action, next_state),
+                "metadata": {
+                    "seed": seed,
+                    "state_vector": state.tolist(),
+                    "action_vector": action.tolist(),
+                    "next_state_vector": next_state.tolist(),
+                },
+            }
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    return path
+
+
 def write_dataset(output: Path, samples: int, seed: int) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     dataset = generate_dataset(samples=samples, seed=seed)
@@ -116,12 +213,13 @@ def write_dataset(output: Path, samples: int, seed: int) -> Path:
         "action_features": ACTION_FEATURES,
     }
     output.with_suffix(".json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    write_jsonl_sidecar(path=default_jsonl_path(), dataset=dataset, seed=seed)
     return output
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate local Silicon Sandbox transition data.")
-    parser.add_argument("--samples", type=int, default=2_000, help="Number of transitions to create.")
+    parser.add_argument("--samples", type=int, default=200, help="Number of transitions to create.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed for reproducible data.")
     parser.add_argument(
         "--output",
@@ -140,6 +238,7 @@ def main() -> None:
     output = write_dataset(output=args.output, samples=args.samples, seed=args.seed)
     print(f"Wrote {args.samples} transitions to {output}")
     print(f"Wrote metadata to {output.with_suffix('.json')}")
+    print(f"Wrote readable JSONL to {default_jsonl_path()}")
 
 
 if __name__ == "__main__":
