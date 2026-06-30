@@ -1,7 +1,7 @@
 {
-  "id": "agent-template",
-  "name": "Agent Template",
-  "description": "A reusable OpenClaw template for long-running agent plugins.",
+  "id": "jepa-inspired-silicon-sandbox",
+  "name": "JEPA-Inspired Silicon Sandbox",
+  "description": "Local market-vision simulations powered by a JEPA-inspired Python engine.",
   "version": "0.1.0",
   "kind": "capability",
   "main": "./src/plugin/index.ts",
@@ -11,21 +11,21 @@
       "scratchDir": {
         "type": "string",
         "description": "Ephemeral working directory for session state. Leading ~ is expanded at plugin-register time.",
-        "default": "~/.agent-template/scratch"
+        "default": "~/.jepa-silicon-sandbox/scratch"
       },
       "outputDir": {
         "type": "string",
         "description": "Durable output directory for run artifacts. Leading ~ is expanded at plugin-register time.",
-        "default": "~/.agent-template/output"
+        "default": "~/.jepa-silicon-sandbox/output"
       },
       "agentName": {
         "type": "string",
-        "description": "Display name used by the example runner.",
-        "default": "Template Agent"
+        "description": "Display name used by Market Vision reports.",
+        "default": "JEPA-Inspired Silicon Sandbox"
       },
       "defaultDelayMs": {
         "type": "number",
-        "description": "Default delay between example progress events.",
+        "description": "Reserved lifecycle setting kept for compatibility.",
         "default": 750
       }
     },

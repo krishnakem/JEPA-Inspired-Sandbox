@@ -25,14 +25,14 @@ function textPayload(result: AgentToolResult): string {
 }
 
 async function main(): Promise<void> {
-    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-template-smoke-'));
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'jepa-sandbox-smoke-'));
     const registered: Array<{ tool: PluginTool; opts: { optional?: boolean } | undefined }> = [];
 
     const api: PluginApi = {
         pluginConfig: {
             scratchDir: path.join(tmpRoot, 'scratch'),
             outputDir: path.join(tmpRoot, 'output'),
-            agentName: 'Smoke Agent',
+            agentName: 'Smoke Silicon Sandbox',
             defaultDelayMs: 1,
         },
         logger: {
@@ -46,12 +46,12 @@ async function main(): Promise<void> {
     };
 
     assert(typeof register === 'function', 'named register export is missing');
-    assert(pluginDefault.id === 'agent-template', 'default export id mismatch');
+    assert(pluginDefault.id === 'jepa-inspired-silicon-sandbox', 'default export id mismatch');
 
     const teardown = register(api);
     const expectedTools = [
         'start_session',
-        'run_agent',
+        'run_market_simulation',
         'get_session_status',
         'stop_run',
         'reset_all',
@@ -72,19 +72,20 @@ async function main(): Promise<void> {
     const startJson = JSON.parse(textPayload(start));
     assert(typeof startJson.session_id === 'string', 'start_session missing session_id');
 
-    const run = await tool('run_agent').execute('call-2', {
+    const run = await tool('run_market_simulation').execute('call-2', {
         session_id: startJson.session_id,
-        topic: 'smoke test',
-        steps: 2,
-        delay_ms: 1,
+        current_market: 'AI coding assistants are growing and competitive',
+        company_type: 'startup',
+        strategic_action: 'launch a free coding agent',
+        simulation_rounds: 2,
     });
     const runJson = JSON.parse(textPayload(run));
-    assert(runJson.status === 'started', 'run_agent did not start');
+    assert(runJson.status === 'started', 'run_market_simulation did not start');
 
     let terminalStatus = '';
     let terminalPayload: any = null;
-    for (let i = 0; i < 20; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 25));
+    for (let i = 0; i < 80; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
         const status = await tool('get_session_status').execute('call-3', {
             session_id: startJson.session_id,
         });
@@ -101,6 +102,10 @@ async function main(): Promise<void> {
         typeof terminalPayload.result?.artifactPath === 'string' &&
             fs.existsSync(terminalPayload.result.artifactPath),
         'completed run did not write an artifact'
+    );
+    assert(
+        String(terminalPayload.result.artifactPath).endsWith('.md'),
+        'completed run did not write a markdown report'
     );
 
     const end = await tool('end_session').execute('call-4', {

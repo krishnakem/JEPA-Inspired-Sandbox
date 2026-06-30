@@ -1,12 +1,12 @@
 /**
- * Generic OpenClaw agent-plugin template.
+ * JEPA-Inspired Silicon Sandbox OpenClaw plugin.
  *
  * This file is the boundary between OpenClaw and your agent implementation.
  * Most plugin projects should only need to edit:
  *
  * - Plugin identity in package.json / openclaw.plugin.json / default export
- * - Tool parameters for run_agent
- * - The runner called from run_agent
+ * - Tool parameters for run_market_simulation
+ * - The runner called from run_market_simulation
  */
 
 import fs from 'node:fs';
@@ -14,7 +14,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createAgentSession } from '../core/AgentSession.js';
-import { ExampleAgentRunner, type ExampleAgentInput } from '../main/ExampleAgent.js';
+import {
+    JepaInspiredSiliconSandboxRunner,
+    type MarketSimulationInput,
+} from '../main/JepaInspiredSiliconSandboxRunner.js';
 import { attachEventBuffer, createRegistry, type SessionEntry } from './session-registry.js';
 
 export interface AgentToolResult {
@@ -69,10 +72,10 @@ function jsonTextResult(payload: unknown, isError = false): AgentToolResult {
 
 function resolvePaths(config: PluginConfig): { scratchDir: string; outputDir: string } {
     const scratchDir = expandTilde(
-        config.scratchDir ?? path.join(os.homedir(), '.agent-template', 'scratch')
+        config.scratchDir ?? path.join(os.homedir(), '.jepa-silicon-sandbox', 'scratch')
     );
     const outputDir = expandTilde(
-        config.outputDir ?? path.join(os.homedir(), '.agent-template', 'output')
+        config.outputDir ?? path.join(os.homedir(), '.jepa-silicon-sandbox', 'output')
     );
     return { scratchDir, outputDir };
 }
@@ -82,13 +85,20 @@ function asPositiveInteger(value: unknown, fallback: number, max: number): numbe
     return Math.max(1, Math.min(Math.floor(value), max));
 }
 
-function parseRunInput(params: Record<string, unknown>, defaultDelayMs: number): ExampleAgentInput {
+function asRequiredString(params: Record<string, unknown>, key: string): string {
+    const value = params[key];
+    if (typeof value !== 'string' || !value.trim()) {
+        throw new Error(`run_market_simulation: ${key} is required.`);
+    }
+    return value.trim();
+}
+
+function parseRunInput(params: Record<string, unknown>): MarketSimulationInput {
     return {
-        topic: typeof params.topic === 'string' && params.topic.trim()
-            ? params.topic.trim()
-            : 'template run',
-        steps: asPositiveInteger(params.steps, 3, 20),
-        delayMs: asPositiveInteger(params.delay_ms, defaultDelayMs, 60_000),
+        currentMarket: asRequiredString(params, 'current_market'),
+        companyType: asRequiredString(params, 'company_type'),
+        strategicAction: asRequiredString(params, 'strategic_action'),
+        simulationRounds: asPositiveInteger(params.simulation_rounds, 4, 12),
     };
 }
 
@@ -113,15 +123,15 @@ export function register(api: PluginApi): () => void {
 
     const sessions = createRegistry();
     const log = api.logger ?? {
-        info: (...a: unknown[]) => console.log('[agent-template]', ...a),
-        warn: (...a: unknown[]) => console.warn('[agent-template]', ...a),
-        error: (...a: unknown[]) => console.error('[agent-template]', ...a),
+        info: (...a: unknown[]) => console.log('[jepa-silicon-sandbox]', ...a),
+        warn: (...a: unknown[]) => console.warn('[jepa-silicon-sandbox]', ...a),
+        error: (...a: unknown[]) => console.error('[jepa-silicon-sandbox]', ...a),
     };
 
     const startSession: PluginTool = {
         name: 'start_session',
         description:
-            'Create a new agent session. Always call this before run_agent. Returns a session_id used by every other tool.',
+            'Create a new market simulation session. Always call this before run_market_simulation. Returns a session_id used by every other tool.',
         parameters: {
             type: 'object',
             properties: {},
@@ -132,7 +142,7 @@ export function register(api: PluginApi): () => void {
                 scratchDir,
                 outputDir,
                 runConfig: {
-                    agentName: config.agentName ?? 'Template Agent',
+                    agentName: config.agentName ?? 'JEPA-Inspired Silicon Sandbox',
                     defaultDelayMs: config.defaultDelayMs ?? 750,
                 },
             });
@@ -151,15 +161,15 @@ export function register(api: PluginApi): () => void {
             log.info('start_session', { sessionId: entry.sessionId });
             return jsonTextResult({
                 session_id: entry.sessionId,
-                message: 'Session started. Call run_agent with this session_id.',
+                message: 'Session started. Call run_market_simulation with this session_id.',
             });
         },
     };
 
-    const runAgent: PluginTool = {
-        name: 'run_agent',
+    const runMarketSimulation: PluginTool = {
+        name: 'run_market_simulation',
         description:
-            'Start the example agent run in the background. This template tool returns immediately; poll get_session_status for progress and the final result.',
+            'Start a local JEPA-inspired market simulation in the background. Poll get_session_status for progress and the final Market Vision report.',
         parameters: {
             type: 'object',
             properties: {
@@ -167,30 +177,34 @@ export function register(api: PluginApi): () => void {
                     type: 'string',
                     description: 'The id returned by start_session.',
                 },
-                topic: {
+                current_market: {
                     type: 'string',
-                    description: 'Example input for the template runner. Replace this with your real agent parameters.',
+                    description: 'Current market description to encode into the numeric market state.',
                 },
-                steps: {
-                    type: 'number',
-                    description: 'How many example progress steps to emit. Defaults to 3, max 20.',
+                company_type: {
+                    type: 'string',
+                    description: 'Company type or profile, such as startup, incumbent, platform, or niche vendor.',
                 },
-                delay_ms: {
+                strategic_action: {
+                    type: 'string',
+                    description: 'Strategic action to simulate.',
+                },
+                simulation_rounds: {
                     type: 'number',
-                    description: 'Delay between example steps. Defaults to plugin config defaultDelayMs or 750.',
+                    description: 'Number of simulation rounds. Defaults to 4, max 12.',
                 },
             },
-            required: ['session_id'],
+            required: ['session_id', 'current_market', 'company_type', 'strategic_action'],
             additionalProperties: false,
         },
         execute: async (_callId, params) => {
             const sessionId = params.session_id;
             if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('run_agent: session_id is required.', true);
+                return textResult('run_market_simulation: session_id is required.', true);
             }
             const entry = sessions.get(sessionId);
             if (!entry) {
-                return textResult(`run_agent: session_id ${sessionId} not found.`, true);
+                return textResult(`run_market_simulation: session_id ${sessionId} not found.`, true);
             }
             if (entry.activeRun?.status === 'running') {
                 return jsonTextResult({
@@ -200,7 +214,12 @@ export function register(api: PluginApi): () => void {
                 });
             }
 
-            const input = parseRunInput(params, entry.session.runConfig.defaultDelayMs);
+            let input: MarketSimulationInput;
+            try {
+                input = parseRunInput(params);
+            } catch (err) {
+                return textResult(err instanceof Error ? err.message : String(err), true);
+            }
             const runController = new AbortController();
             const startedAt = Date.now();
             entry.activeRun = {
@@ -209,20 +228,20 @@ export function register(api: PluginApi): () => void {
                 controller: runController,
             };
 
-            const runner = new ExampleAgentRunner(entry.session);
+            const runner = new JepaInspiredSiliconSandboxRunner(entry.session);
             void runner.run(input, runController.signal)
                 .then((result) => {
                     if (!entry.activeRun) return;
                     entry.activeRun.status = 'completed';
                     entry.activeRun.result = result;
-                    log.info('run_agent completed', { sessionId, artifactPath: result.artifactPath });
+                    log.info('run_market_simulation completed', { sessionId, artifactPath: result.artifactPath });
                 })
                 .catch((err) => {
                     if (!entry.activeRun) return;
                     const aborted = runController.signal.aborted || entry.controller.signal.aborted;
                     entry.activeRun.status = aborted ? 'stopped' : 'failed';
                     entry.activeRun.errorMessage = err instanceof Error ? err.message : String(err);
-                    log.warn('run_agent ended', {
+                    log.warn('run_market_simulation ended', {
                         sessionId,
                         status: entry.activeRun.status,
                         error: entry.activeRun.errorMessage,
@@ -233,7 +252,7 @@ export function register(api: PluginApi): () => void {
                 status: 'started',
                 session_id: sessionId,
                 started_at: new Date(startedAt).toISOString(),
-                message: 'Agent run started in the background. Poll get_session_status for progress.',
+                message: 'Market simulation started in the background. Poll get_session_status for progress.',
             });
         },
     };
@@ -283,7 +302,7 @@ export function register(api: PluginApi): () => void {
     const stopRun: PluginTool = {
         name: 'stop_run',
         description:
-            'Request cancellation of an in-flight run_agent call. The runner receives an AbortSignal and should stop cooperatively.',
+            'Request cancellation of an in-flight run_market_simulation call. The runner receives an AbortSignal and should stop cooperatively.',
         parameters: {
             type: 'object',
             properties: {
@@ -325,7 +344,7 @@ export function register(api: PluginApi): () => void {
     const resetAll: PluginTool = {
         name: 'reset_all',
         description:
-            'Factory reset for this template plugin. Aborts sessions and deletes scratch/output directories. Call without confirm first for a dry-run preview.',
+            'Factory reset for this plugin. Aborts sessions and deletes scratch/output directories. Call without confirm first for a dry-run preview.',
         parameters: {
             type: 'object',
             properties: {
@@ -396,13 +415,13 @@ export function register(api: PluginApi): () => void {
     };
 
     api.registerTool(startSession);
-    api.registerTool(runAgent);
+    api.registerTool(runMarketSimulation);
     api.registerTool(getSessionStatus);
     api.registerTool(stopRun);
     api.registerTool(resetAll);
     api.registerTool(endSession);
 
-    log.info('Agent template plugin registered', {
+    log.info('JEPA-Inspired Silicon Sandbox plugin registered', {
         scratchDir,
         outputDir,
         tools: 6,
@@ -417,9 +436,9 @@ export function register(api: PluginApi): () => void {
 }
 
 export default {
-    id: 'agent-template',
-    name: 'Agent Template',
-    description: 'A reusable OpenClaw template for long-running agent plugins.',
+    id: 'jepa-inspired-silicon-sandbox',
+    name: 'JEPA-Inspired Silicon Sandbox',
+    description: 'Local market-vision simulations powered by a JEPA-inspired Python engine.',
     kind: 'capability' as const,
     register,
 };
