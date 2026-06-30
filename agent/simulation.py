@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -159,6 +161,10 @@ def confidence_score(previous_state: np.ndarray, next_state: np.ndarray, action:
     return round(clamp(base), 3)
 
 
+def print_json_progress(payload: dict[str, object]) -> None:
+    print(json.dumps(payload, separators=(",", ":"), sort_keys=True), flush=True)
+
+
 def simulate(
     current_market: str,
     company_type: str = "",
@@ -167,6 +173,7 @@ def simulate(
     model_path: Path | None = None,
     company_profile: str | None = None,
     initial_action: str | None = None,
+    json_progress: bool = False,
 ) -> dict[str, object]:
     company_type = company_type or company_profile or "startup"
     strategic_action = strategic_action or initial_action or "reposition the company"
@@ -175,13 +182,22 @@ def simulate(
     model = None
     latent = None
     if model_path and model_path.exists():
-        import torch
+        try:
+            import torch
 
-        from agent.model import load_model
+            from agent.model import load_model
 
-        model = load_model(model_path)
-        with torch.no_grad():
-            latent = model.encode_state(torch.from_numpy(state.astype(np.float32)))
+            model = load_model(model_path)
+            with torch.no_grad():
+                latent = model.encode_state(torch.from_numpy(state.astype(np.float32)))
+        except Exception as exc:
+            print(
+                f"Warning: could not load trained model at {model_path}; "
+                f"falling back to rule-based local dynamics. ({exc})",
+                file=sys.stderr,
+            )
+            model = None
+            latent = None
 
     rounds = [
         {
@@ -205,32 +221,42 @@ def simulate(
         else:
             with torch.no_grad():
                 action_tensor = torch.from_numpy(action.astype(np.float32))
-                latent = model.predictor(
+                predicted_latent = model.predictor(
                     torch.cat(
                         [latent, action_tensor],
                         dim=-1,
                     )
                 )
-                prediction = model.decode_state(latent)
+                prediction = model.decode_state(predicted_latent)
+                latent = model.encode_state(prediction)
             state = prediction.numpy().astype(np.float32)
 
-        rounds.append(
-            {
-                "round": round_index,
-                "actor": actor,
-                "action_or_reaction": describe_action(actor, strategic_action, action),
-                "predicted_market_shift": describe_shift(previous_state, state),
-                "updated_market_state": state_to_dict(state),
-                "confidence": confidence_score(previous_state, state, action, model is not None),
-                "summary": summarize_round(state),
-            }
-        )
+        round_record = {
+            "round": round_index,
+            "actor": actor,
+            "action_or_reaction": describe_action(actor, strategic_action, action),
+            "predicted_market_shift": describe_shift(previous_state, state),
+            "updated_market_state": state_to_dict(state),
+            "confidence": confidence_score(previous_state, state, action, model is not None),
+            "summary": summarize_round(state),
+        }
+        rounds.append(round_record)
+        if json_progress:
+            print_json_progress(
+                {
+                    "type": "round",
+                    "round": round_record["round"],
+                    "actor": round_record["actor"],
+                    "confidence": round_record["confidence"],
+                    "summary": round_record["summary"],
+                }
+            )
 
     final_state = state.reshape(-1)
     opportunity = STATE_FEATURES[int(np.argmax(final_state))]
     constraint = STATE_FEATURES[int(np.argmin(final_state))]
 
-    return {
+    result = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "inputs": {
             "current_market": current_market,
@@ -250,6 +276,15 @@ def simulate(
             f"{opportunity}. The main strategic constraint is {constraint}."
         ),
     }
+    if json_progress:
+        print_json_progress(
+            {
+                "type": "final",
+                "mode": result["mode"],
+                "final_market_vision": result["final_market_vision"],
+            }
+        )
+    return result
 
 
 def write_outputs(result: dict[str, object], output_dir: Path, report_format: str) -> Path:
@@ -277,6 +312,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=default_output_dir(),
         help="Directory for JSON and Markdown outputs.",
     )
+    parser.add_argument(
+        "--json-progress",
+        action="store_true",
+        help="Stream one compact JSON progress object per simulation round.",
+    )
     return parser
 
 
@@ -299,6 +339,7 @@ def main() -> None:
         model_path=model_path,
         company_profile=args.company_profile,
         initial_action=args.initial_action,
+        json_progress=args.json_progress,
     )
     report_path = write_outputs(result, args.output_dir, args.format)
     print(result["final_market_vision"])

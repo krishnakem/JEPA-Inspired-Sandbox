@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { AgentSession } from '../core/AgentSession.js';
 import { type AgentRunResult, type AgentRunner, throwIfAborted } from './AgentRunner.js';
@@ -19,7 +20,23 @@ interface ProcessResult {
     reportPath: string | null;
 }
 
+function resolveRepoRoot(): string {
+    let current = path.dirname(fileURLToPath(import.meta.url));
+    while (true) {
+        if (fs.existsSync(path.join(current, 'agent', 'simulation.py'))) {
+            return current;
+        }
+        const parent = path.dirname(current);
+        if (parent === current) {
+            throw new Error('Could not locate repository root containing agent/simulation.py.');
+        }
+        current = parent;
+    }
+}
+
 export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimulationInput> {
+    private readonly repoRoot = resolveRepoRoot();
+
     constructor(private readonly session: AgentSession) {}
 
     async run(input: MarketSimulationInput, signal: AbortSignal): Promise<AgentRunResult> {
@@ -93,16 +110,21 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
             String(input.simulationRounds),
             '--format',
             'markdown',
+            '--json-progress',
             '--output-dir',
             reportsDir,
         ];
 
         return new Promise((resolve, reject) => {
             const child = spawn(python, args, {
-                cwd: process.cwd(),
+                cwd: this.repoRoot,
                 env: {
                     ...process.env,
                     PYTHONUNBUFFERED: '1',
+                    PYTHONPATH: [
+                        this.repoRoot,
+                        process.env.PYTHONPATH,
+                    ].filter(Boolean).join(path.delimiter),
                 },
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
@@ -126,6 +148,7 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
                 this.session.events.emit('run-progress', {
                     stream,
                     message: line,
+                    payload: this.parseProgressLine(line),
                 });
                 const match = line.match(/Wrote markdown Market Vision report to (.+)$/);
                 if (match?.[1]) reportPath = match[1].trim();
@@ -171,15 +194,36 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
     }
 
     private async findDiagnosticFigures(): Promise<string[]> {
-        const plotsDir = path.join(process.cwd(), 'agent', 'artifacts', 'plots');
+        const plotsDir = path.join(this.repoRoot, 'agent', 'artifacts', 'plots');
         const names = ['latent_trajectory.png', 'effective_rank.png', 'collapse_comparison.png'];
         return names
             .map((name) => path.join(plotsDir, name))
             .filter((candidate) => fs.existsSync(candidate));
     }
 
+    private parseProgressLine(line: string): unknown {
+        try {
+            return JSON.parse(line);
+        } catch {
+            return null;
+        }
+    }
+
     private summaryFromStdout(stdout: string): string {
-        const firstLine = stdout.split(/\r?\n/).find((line) => line.trim());
+        for (const line of stdout.split(/\r?\n/)) {
+            const payload = this.parseProgressLine(line);
+            if (
+                typeof payload === 'object' &&
+                payload !== null &&
+                (payload as { type?: unknown }).type === 'final' &&
+                typeof (payload as { final_market_vision?: unknown }).final_market_vision === 'string'
+            ) {
+                return (payload as { final_market_vision: string }).final_market_vision;
+            }
+        }
+        const firstLine = stdout
+            .split(/\r?\n/)
+            .find((line) => line.trim() && !line.trim().startsWith('{'));
         return firstLine?.trim() ?? 'Market Vision simulation completed.';
     }
 }
