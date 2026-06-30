@@ -1,0 +1,1 @@
+You are not to build, you are to look at the current state and give advice on the actions I want to take.
