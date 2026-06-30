@@ -27,9 +27,24 @@ ACTION_KEYWORDS = {
     "repositioning": ["reposition", "brand", "segment", "focus"],
 }
 
+ROUND_ACTORS = [
+    "company",
+    "competitors",
+    "customers",
+    "investors/regulators",
+]
+
 
 def clamp(value: float) -> float:
     return float(max(0.0, min(1.0, value)))
+
+
+def default_model_path() -> Path:
+    return Path("agent/artifacts/model.pt")
+
+
+def default_output_dir() -> Path:
+    return Path("agent/artifacts/simulations")
 
 
 def market_text_adjustments(current_market: str) -> np.ndarray:
@@ -75,6 +90,45 @@ def encode_action(strategic_action: str) -> np.ndarray:
     return action.reshape(1, -1)
 
 
+def actor_for_round(round_index: int) -> str:
+    return ROUND_ACTORS[(round_index - 1) % len(ROUND_ACTORS)]
+
+
+def action_for_actor(base_action: np.ndarray, actor: str, round_index: int) -> np.ndarray:
+    action = np.zeros_like(base_action)
+    base = base_action.reshape(-1)
+
+    if actor == "company":
+        action = base_action.copy()
+    elif actor == "competitors":
+        if base[ACTION_FEATURES.index("price_cut")] > 0:
+            action[0, ACTION_FEATURES.index("product_launch")] = 0.65
+        else:
+            action[0, ACTION_FEATURES.index("price_cut")] = 0.62
+        action[0, ACTION_FEATURES.index("repositioning")] = 0.25
+    elif actor == "customers":
+        action[0, ACTION_FEATURES.index("partnership")] = 0.35
+        action[0, ACTION_FEATURES.index("repositioning")] = 0.45
+    else:
+        action[0, ACTION_FEATURES.index("partnership")] = 0.42
+        action[0, ACTION_FEATURES.index("acquisition")] = 0.25
+
+    return np.clip(action * (1.0 - 0.04 * (round_index - 1)), 0.0, 1.0).astype(np.float32)
+
+
+def describe_action(actor: str, strategic_action: str, action: np.ndarray) -> str:
+    if actor == "company":
+        return strategic_action
+
+    values = action.reshape(-1)
+    strongest = ACTION_FEATURES[int(np.argmax(values))].replace("_", " ")
+    if actor == "competitors":
+        return f"competitors answer with {strongest} pressure"
+    if actor == "customers":
+        return f"customers shift adoption toward vendors with clearer {strongest}"
+    return f"investors and regulators reassess the market through {strongest}"
+
+
 def state_to_dict(state: np.ndarray) -> dict[str, float]:
     values = state.reshape(-1)
     return {feature: round(float(values[index]), 4) for index, feature in enumerate(STATE_FEATURES)}
@@ -90,46 +144,84 @@ def summarize_round(state: np.ndarray) -> str:
     )
 
 
+def describe_shift(previous_state: np.ndarray, next_state: np.ndarray) -> str:
+    delta = next_state.reshape(-1) - previous_state.reshape(-1)
+    strongest = int(np.argmax(np.abs(delta)))
+    direction = "rises" if delta[strongest] >= 0 else "softens"
+    feature = STATE_FEATURES[strongest].replace("_", " ")
+    return f"{feature} {direction} by {abs(float(delta[strongest])):.2f}"
+
+
+def confidence_score(previous_state: np.ndarray, next_state: np.ndarray, action: np.ndarray, model_used: bool) -> float:
+    shift = float(np.linalg.norm(next_state.reshape(-1) - previous_state.reshape(-1)))
+    action_strength = float(np.clip(action.mean(), 0.0, 1.0))
+    base = 0.62 + (0.08 if model_used else 0.0) + 0.18 * action_strength - 0.18 * shift
+    return round(clamp(base), 3)
+
+
 def simulate(
     current_market: str,
-    company_type: str,
-    strategic_action: str,
-    simulation_rounds: int,
+    company_type: str = "",
+    strategic_action: str = "",
+    simulation_rounds: int = 6,
     model_path: Path | None = None,
+    company_profile: str | None = None,
+    initial_action: str | None = None,
 ) -> dict[str, object]:
+    company_type = company_type or company_profile or "startup"
+    strategic_action = strategic_action or initial_action or "reposition the company"
     state = encode_initial_state(current_market, company_type)
-    action = encode_action(strategic_action)
+    base_action = encode_action(strategic_action)
     model = None
-    if model_path:
+    latent = None
+    if model_path and model_path.exists():
         import torch
 
         from agent.model import load_model
 
         model = load_model(model_path)
+        with torch.no_grad():
+            latent = model.encode_state(torch.from_numpy(state.astype(np.float32)))
 
     rounds = [
         {
             "round": 0,
-            "state": state_to_dict(state),
-            "summary": "Initial encoded market representation.",
+            "actor": "market",
+            "action_or_reaction": "starting market conditions",
+            "predicted_market_shift": "baseline market state encoded from the prompt",
+            "updated_market_state": state_to_dict(state),
+            "confidence": 1.0,
+            "summary": "Initial market representation.",
         }
     ]
 
     for round_index in range(1, simulation_rounds + 1):
+        actor = actor_for_round(round_index)
+        action = action_for_actor(base_action, actor, round_index)
+        previous_state = state.copy()
+
         if model is None:
             state = evolve_market(state, action, rng=None, noise_scale=0.0)
         else:
             with torch.no_grad():
-                prediction = model.predict_next(
-                    torch.from_numpy(state.astype(np.float32)),
-                    torch.from_numpy(action.astype(np.float32)),
+                action_tensor = torch.from_numpy(action.astype(np.float32))
+                latent = model.predictor(
+                    torch.cat(
+                        [latent, action_tensor],
+                        dim=-1,
+                    )
                 )
+                prediction = model.decode_state(latent)
             state = prediction.numpy().astype(np.float32)
 
         rounds.append(
             {
                 "round": round_index,
-                "state": state_to_dict(state),
+                "actor": actor,
+                "action_or_reaction": describe_action(actor, strategic_action, action),
+                "predicted_market_shift": describe_shift(previous_state, state),
+                "updated_market_state": state_to_dict(state),
+                "confidence": confidence_score(previous_state, state, action, model is not None),
                 "summary": summarize_round(state),
             }
         )
@@ -149,7 +241,7 @@ def simulate(
         },
         "mode": "trained_model" if model is not None else "rule_based_local_dynamics",
         "action_vector": {
-            feature: round(float(action.reshape(-1)[index]), 4)
+            feature: round(float(base_action.reshape(-1)[index]), 4)
             for index, feature in enumerate(ACTION_FEATURES)
         },
         "rounds": rounds,
@@ -198,14 +290,16 @@ def write_outputs(result: dict[str, object], output_dir: Path) -> tuple[Path, Pa
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a local Silicon Sandbox market simulation.")
     parser.add_argument("--current-market", required=True, help="Current market description.")
-    parser.add_argument("--company-type", required=True, help="Company type taking the action.")
-    parser.add_argument("--strategic-action", required=True, help="Strategic action to simulate.")
+    parser.add_argument("--company-type", default="", help="Company type taking the action.")
+    parser.add_argument("--company-profile", help="Alias for company type/profile.")
+    parser.add_argument("--strategic-action", default="", help="Strategic action to simulate.")
+    parser.add_argument("--initial-action", help="Alias for the initial strategic action.")
     parser.add_argument("--simulation-rounds", type=int, default=6, help="Number of rounds to run.")
     parser.add_argument("--model", type=Path, help="Optional trained model checkpoint.")
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("artifacts/simulations"),
+        default=default_output_dir(),
         help="Directory for JSON and Markdown outputs.",
     )
     return parser
@@ -218,12 +312,18 @@ def main() -> None:
     if args.model and not args.model.exists():
         raise SystemExit(f"Model file not found: {args.model}")
 
+    model_path = args.model
+    if model_path is None and default_model_path().exists():
+        model_path = default_model_path()
+
     result = simulate(
         current_market=args.current_market,
         company_type=args.company_type,
         strategic_action=args.strategic_action,
         simulation_rounds=args.simulation_rounds,
-        model_path=args.model,
+        model_path=model_path,
+        company_profile=args.company_profile,
+        initial_action=args.initial_action,
     )
     json_path, md_path = write_outputs(result, args.output_dir)
     print(result["final_market_vision"])
