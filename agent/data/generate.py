@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
+from agent.config import HORIZON
+
 STATE_FEATURES = [
     "demand_growth",
     "price_pressure",
@@ -118,12 +120,18 @@ def evolve_market(
 def generate_dataset(samples: int, seed: int) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
     states = sample_states(rng, samples)
-    actions = sample_actions(rng, samples)
-    next_states = evolve_market(states, actions, rng=rng)
+    current_states = states
+    action_steps = []
+    next_state_steps = []
+    for _step in range(HORIZON):
+        actions = sample_actions(rng, samples)
+        current_states = evolve_market(current_states, actions, rng=rng)
+        action_steps.append(actions)
+        next_state_steps.append(current_states)
     return {
         "states": states,
-        "actions": actions,
-        "next_states": next_states,
+        "actions": np.stack(action_steps, axis=1),
+        "next_states": np.stack(next_state_steps, axis=1),
     }
 
 
@@ -143,6 +151,10 @@ def render_market_state(state: np.ndarray) -> str:
 
 
 def render_company_action(action: np.ndarray) -> str:
+    if action.ndim == 2:
+        steps = [render_company_action(step) for step in action]
+        return "; ".join(f"step {index}: {summary}" for index, summary in enumerate(steps, start=1))
+
     primary_index = int(np.argmax(action))
     primary_name = ACTION_FEATURES[primary_index].replace("_", " ")
     active = [
@@ -161,8 +173,10 @@ def choose_industry(state: np.ndarray, action: np.ndarray, index: int, seed: int
 
 
 def choose_transition_type(state: np.ndarray, action: np.ndarray, next_state: np.ndarray) -> str:
-    primary_action = int(np.argmax(action))
-    delta = next_state - state
+    action_summary = action.max(axis=0) if action.ndim == 2 else action
+    final_state = next_state[-1] if next_state.ndim == 2 else next_state
+    primary_action = int(np.argmax(action_summary))
+    delta = final_state - state
     if state[5] > 0.68 or delta[5] > 0.04:
         return "regulatory pressure"
     if delta[2] > 0.07:
@@ -184,17 +198,19 @@ def write_jsonl_sidecar(
         for index, (state, action, next_state) in enumerate(
             zip(dataset["states"], dataset["actions"], dataset["next_states"])
         ):
+            final_state = next_state[-1] if next_state.ndim == 2 else next_state
             record = {
                 "current_market_state": render_market_state(state),
                 "company_action": render_company_action(action),
-                "future_market_state": render_market_state(next_state),
+                "future_market_state": render_market_state(final_state),
                 "industry": choose_industry(state, action, index=index, seed=seed),
                 "transition_type": choose_transition_type(state, action, next_state),
                 "metadata": {
                     "seed": seed,
+                    "horizon": HORIZON,
                     "state_vector": state.tolist(),
-                    "action_vector": action.tolist(),
-                    "next_state_vector": next_state.tolist(),
+                    "action_sequence_vector": action.tolist(),
+                    "next_state_sequence_vector": next_state.tolist(),
                 },
             }
             handle.write(json.dumps(record, sort_keys=True) + "\n")
@@ -209,6 +225,7 @@ def write_dataset(output: Path, samples: int, seed: int) -> Path:
     metadata = {
         "samples": samples,
         "seed": seed,
+        "horizon": HORIZON,
         "state_features": STATE_FEATURES,
         "action_features": ACTION_FEATURES,
     }

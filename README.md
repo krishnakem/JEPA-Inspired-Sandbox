@@ -6,8 +6,8 @@ strategic market forecasting.
 ## Vision
 
 JEPA-Inspired Silicon Sandbox is a local market-vision forecasting MVP. A user
-describes a current market, a company type, a strategic action, and a number
-of rounds. The system rolls the market forward through company action,
+describes a current market, a company type, and a strategic action. The system
+rolls the market forward through four rounds of company action,
 competitor response, customer reaction, and investor/regulator pressure, then
 returns a structured Market Vision report.
 
@@ -96,7 +96,6 @@ python3 -m agent.simulation \
   --strategic-action "launch a free coding agent" \
   --objective developer_adoption \
   --industry AI \
-  --simulation-rounds 4 \
   --level medium \
   --format markdown
 ```
@@ -146,7 +145,6 @@ python3 -m agent.simulation \
   --strategic-action "launch a free coding agent" \
   --objective developer_adoption \
   --industry AI \
-  --simulation-rounds 4 \
   --level medium \
   --format markdown
 ```
@@ -160,13 +158,13 @@ python3 -m agent.simulation \
   --strategic-action "launch a free coding agent" \
   --objective developer_adoption \
   --industry AI \
-  --rounds 5 \
   --level hard \
   --format markdown
 ```
 
 The supported levels are `light`, `medium`, and `hard`. They map to the existing
-simulation styles `conservative`, `base_case`, and `aggressive`.
+simulation styles `conservative`, `base_case`, and `aggressive`. Every
+simulation runs exactly four rounds.
 
 Generate diagnostics:
 
@@ -211,7 +209,6 @@ marketsim_end_session
   "company_type": "startup",
   "objective": "developer_adoption",
   "industry": "AI",
-  "rounds": 4,
   "level": "medium"
 }
 ```
@@ -219,7 +216,8 @@ marketsim_end_session
 `company_type` must be `startup`, `incumbent`, `platform`, or `niche vendor`.
 `level` must be `light`, `medium`, or `hard`. The run tool creates a session,
 returns its `session_id`, writes a temporary config JSON, launches
-`python3 -m agent.simulation` locally, and returns immediately. Poll
+`python3 -m agent.simulation` locally, and returns immediately. The simulation
+always runs exactly four rounds. Poll
 `marketsim_get_session_status` with that `session_id` until `run_status` is
 `completed`; the result includes the final Market Vision report path and
 diagnostic plot paths when they are available. Call `marketsim_end_session` when

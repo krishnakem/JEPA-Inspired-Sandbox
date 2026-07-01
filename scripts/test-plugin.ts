@@ -73,7 +73,6 @@ async function main(): Promise<void> {
         company_type: 'startup',
         objective: 'developer_adoption',
         industry: 'AI',
-        rounds: 2,
         level: 'hard',
     });
     const runJson = JSON.parse(textPayload(run));
@@ -83,7 +82,7 @@ async function main(): Promise<void> {
     const runToolParams = tool('marketsim_run_market_simulation').parameters;
     assert(
         Object.keys(runToolParams.properties).sort().join(',') ===
-            ['company_type', 'current_market', 'industry', 'level', 'objective', 'rounds', 'strategic_action'].join(','),
+            ['company_type', 'current_market', 'industry', 'level', 'objective', 'strategic_action'].join(','),
         'marketsim_run_market_simulation exposed unexpected parameters'
     );
     assert(

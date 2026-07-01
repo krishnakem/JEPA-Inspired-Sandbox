@@ -80,11 +80,6 @@ function resolvePaths(config: PluginConfig): { scratchDir: string; outputDir: st
     return { scratchDir, outputDir };
 }
 
-function asPositiveInteger(value: unknown, fallback: number, max: number): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
-    return Math.max(1, Math.min(Math.floor(value), max));
-}
-
 function asRequiredString(params: Record<string, unknown>, key: string): string {
     const value = params[key];
     if (typeof value !== 'string' || !value.trim()) {
@@ -139,7 +134,6 @@ function parseRunInput(params: Record<string, unknown>): MarketSimulationInput {
         currentMarket: asRequiredString(params, 'current_market'),
         companyType: asRequiredEnum(params, 'company_type', COMPANY_TYPES),
         strategicAction: asRequiredString(params, 'strategic_action'),
-        simulationRounds: asPositiveInteger(params.rounds, 4, 12),
         simulationStyle: LEVEL_TO_STYLE[level],
         objective: asOptionalString(params, 'objective') ?? 'market_share',
         industry: asOptionalString(params, 'industry') ?? 'AI',
@@ -175,7 +169,7 @@ export function register(api: PluginApi): () => void {
     const runMarketSimulation: PluginTool = {
         name: 'marketsim_run_market_simulation',
         description:
-            'Create a session and start a local JEPA-inspired market simulation in the background. Poll marketsim_get_session_status with the returned session_id for progress and the final Market Vision report.',
+            'Create a session and start a fixed 4-round local JEPA-inspired market simulation in the background. Poll marketsim_get_session_status with the returned session_id for progress and the final Market Vision report.',
         parameters: {
             type: 'object',
             properties: {
@@ -191,10 +185,6 @@ export function register(api: PluginApi): () => void {
                 strategic_action: {
                     type: 'string',
                     description: 'Strategic action to simulate.',
-                },
-                rounds: {
-                    type: 'number',
-                    description: 'Number of simulation rounds. Defaults to 4, max 12.',
                 },
                 objective: {
                     type: 'string',
@@ -459,7 +449,7 @@ export function register(api: PluginApi): () => void {
 export default {
     id: 'jepa-inspired-silicon-sandbox',
     name: 'JEPA-Inspired Silicon Sandbox',
-    description: 'Host-only local market-vision simulations powered by a JEPA-inspired Python engine.',
+    description: 'Host-only local market-vision simulations powered by a JEPA-inspired Python engine with a fixed 4-round horizon.',
     kind: 'capability' as const,
     register,
 };

@@ -9,6 +9,9 @@ import re
 from typing import Any
 
 
+ROUNDS = 4
+HORIZON = ROUNDS
+
 DEFAULT_MARKET_DIMENSIONS = [
     "demand_growth",
     "price_pressure",
@@ -65,7 +68,6 @@ CONFIG_FIELDS = {
     "action_dimensions",
     "actors",
     "industry",
-    "rounds",
     "simulation_style",
     "objective",
     "report_format",
@@ -80,7 +82,7 @@ class SimulationConfig:
     action_dimensions: list[str] = field(default_factory=lambda: list(DEFAULT_ACTION_DIMENSIONS))
     actors: list[str] = field(default_factory=lambda: list(DEFAULT_ACTORS))
     industry: str = "AI"
-    rounds: int = 4
+    rounds: int = ROUNDS
     simulation_style: str = "base_case"
     objective: str = "market_share"
     report_format: str = "strategy_memo"
@@ -127,8 +129,8 @@ def validate_config(config: SimulationConfig) -> None:
     _validate_string_list(config.market_dimensions, "market_dimensions", require_dimensions=True)
     _validate_string_list(config.action_dimensions, "action_dimensions", require_dimensions=True)
     _validate_string_list(config.actors, "actors")
-    if config.rounds < 1:
-        raise ValueError("rounds must be at least 1")
+    if config.rounds != ROUNDS:
+        raise ValueError(f"rounds is fixed at {ROUNDS}")
     if not config.industry.strip():
         raise ValueError("industry must not be empty")
     if config.simulation_style not in SIMULATION_STYLES:

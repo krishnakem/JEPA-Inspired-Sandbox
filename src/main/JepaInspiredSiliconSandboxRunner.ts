@@ -11,7 +11,6 @@ export interface MarketSimulationInput {
     currentMarket: string;
     companyType: string;
     strategicAction: string;
-    simulationRounds?: number;
     simulationStyle?: string;
     objective?: string;
     industry?: string;
@@ -48,7 +47,6 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
             current_market: input.currentMarket,
             company_type: input.companyType,
             strategic_action: input.strategicAction,
-            simulation_rounds: input.simulationRounds ?? null,
             simulation_style: input.simulationStyle ?? null,
         });
 
@@ -121,10 +119,6 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         if (configPath) {
             args.push('--config', configPath);
         }
-        if (input.simulationRounds) {
-            args.push('--simulation-rounds', String(input.simulationRounds));
-        }
-
         return new Promise((resolve, reject) => {
             const child = spawn(python, args, {
                 cwd: this.repoRoot,
@@ -198,7 +192,6 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         reportsDir: string
     ): Promise<string | null> {
         const config: Record<string, unknown> = {};
-        if (input.simulationRounds) config.rounds = input.simulationRounds;
         if (input.simulationStyle) config.simulation_style = input.simulationStyle;
         if (input.objective) config.objective = input.objective;
         if (input.industry) config.industry = input.industry;

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent.config import SimulationConfig, load_config_file, merge_config
+from agent.config import ROUNDS, SimulationConfig, load_config_file, merge_config
 from agent.data.generate import write_dataset
 from agent.report import SECTION_TITLES, write_report
 from agent.simulation import simulate
@@ -26,9 +26,10 @@ class PipelineTest(unittest.TestCase):
                 current_market="AI coding assistants are growing and competitive",
                 company_type="startup",
                 strategic_action="launch a free coding agent",
-                simulation_rounds=2,
                 model_path=None,
             )
+            self.assertEqual(rule_result["inputs"]["simulation_rounds"], ROUNDS)
+            self.assertEqual(len(rule_result["rounds"]), ROUNDS + 1)
             rule_report = write_report(rule_result, root / "rule-reports", "markdown")
             self.assertTrue(rule_report.exists())
             self.assert_report_sections(rule_report)
@@ -57,9 +58,10 @@ class PipelineTest(unittest.TestCase):
                 current_market="AI coding assistants are growing and competitive",
                 company_type="startup",
                 strategic_action="launch a free coding agent",
-                simulation_rounds=2,
                 model_path=model_path,
             )
+            self.assertEqual(trained_result["inputs"]["simulation_rounds"], ROUNDS)
+            self.assertEqual(len(trained_result["rounds"]), ROUNDS + 1)
             trained_report = write_report(trained_result, root / "trained-reports", "markdown")
 
             self.assertTrue(model_path.exists())
@@ -82,7 +84,6 @@ class PipelineTest(unittest.TestCase):
                   "market_dimensions": ["developer_adoption", "enterprise_trust"],
                   "action_dimensions": ["open_source_release", "enterprise_push"],
                   "actors": ["startup", "developers"],
-                  "rounds": 3,
                   "simulation_style": "aggressive",
                   "objective": "developer_adoption",
                   "report_format": "founder_memo"
@@ -92,7 +93,7 @@ class PipelineTest(unittest.TestCase):
             )
             config = load_config_file(path)
         self.assertEqual(config.market_dimensions, ["developer_adoption", "enterprise_trust"])
-        self.assertEqual(config.rounds, 3)
+        self.assertEqual(config.rounds, ROUNDS)
 
     def test_merge_config_override_priority(self) -> None:
         config = SimulationConfig(
@@ -114,11 +115,11 @@ class PipelineTest(unittest.TestCase):
         )
         config = merge_config(
             config,
-            {"rounds": 2, "simulation_style": "regulated", "report_format": "risk_report"},
+            {"simulation_style": "regulated", "report_format": "risk_report"},
             source="test overrides",
         )
         self.assertEqual(config.industry, "AI")
-        self.assertEqual(config.rounds, 2)
+        self.assertEqual(config.rounds, ROUNDS)
         self.assertEqual(config.simulation_style, "regulated")
         self.assertEqual(config.report_format, "risk_report")
 
@@ -137,7 +138,6 @@ class PipelineTest(unittest.TestCase):
             ],
             actors=["startup", "incumbent", "developers"],
             industry="AI",
-            rounds=3,
             simulation_style="aggressive",
             objective="developer_adoption",
             report_format="founder_memo",
@@ -153,7 +153,8 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["config"]["report_format"], "founder_memo")
         self.assertEqual(list(result["rounds"][-1]["updated_market_state"]), config.market_dimensions)
         self.assertEqual(list(result["action_vector"]), config.action_dimensions)
-        self.assertEqual([round_["actor"] for round_ in result["rounds"][1:]], config.actors)
+        expected_actors = [config.actors[index % len(config.actors)] for index in range(ROUNDS)]
+        self.assertEqual([round_["actor"] for round_ in result["rounds"][1:]], expected_actors)
 
         with tempfile.TemporaryDirectory() as tmp:
             report_path = write_report(result, Path(tmp), "markdown")

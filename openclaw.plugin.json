@@ -1,7 +1,7 @@
 {
   "id": "jepa-inspired-silicon-sandbox",
   "name": "JEPA-Inspired Silicon Sandbox",
-  "description": "Host-only local market-vision simulations powered by a JEPA-inspired Python engine and the local python3 runtime.",
+  "description": "Host-only local market-vision simulations powered by a JEPA-inspired Python engine and the local python3 runtime. Simulations run a fixed 4-round horizon.",
   "version": "0.1.0",
   "kind": "capability",
   "main": "./src/plugin/index.ts",

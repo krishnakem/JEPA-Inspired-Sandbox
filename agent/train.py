@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from agent.config import HORIZON
 from agent.data.generate import ACTION_FEATURES, STATE_FEATURES, default_output_path, write_dataset
 
 
@@ -19,11 +20,25 @@ def load_or_create_data(path: Path, samples: int, seed: int) -> dict[str, np.nda
     if not path.exists():
         write_dataset(output=path, samples=samples, seed=seed)
     with np.load(path) as data:
-        return {
+        dataset = {
             "states": data["states"].astype(np.float32),
             "actions": data["actions"].astype(np.float32),
             "next_states": data["next_states"].astype(np.float32),
         }
+    if (
+        dataset["actions"].ndim != 3
+        or dataset["next_states"].ndim != 3
+        or dataset["actions"].shape[1] != HORIZON
+        or dataset["next_states"].shape[1] != HORIZON
+    ):
+        write_dataset(output=path, samples=samples, seed=seed)
+        with np.load(path) as data:
+            dataset = {
+                "states": data["states"].astype(np.float32),
+                "actions": data["actions"].astype(np.float32),
+                "next_states": data["next_states"].astype(np.float32),
+            }
+    return dataset
 
 
 def train_model(
@@ -88,9 +103,19 @@ def train_model(
         model.train()
         epoch_losses = []
         epoch_ranks = []
-        for state, action, next_state in train_loader:
-            parts = model.training_loss(state, action, next_state)
-            loss = parts["loss"]
+        for state, action_sequence, next_state_sequence in train_loader:
+            step_parts = []
+            current_state = state
+            for horizon_step in range(HORIZON):
+                next_state = next_state_sequence[:, horizon_step, :]
+                parts = model.training_loss(
+                    current_state,
+                    action_sequence[:, horizon_step, :],
+                    next_state,
+                )
+                step_parts.append(parts)
+                current_state = next_state
+            loss = sum(parts["loss"] for parts in step_parts) / HORIZON
 
             optimizer.zero_grad()
             loss.backward()
@@ -99,17 +124,19 @@ def train_model(
 
             step += 1
             loss_value = float(loss.detach())
-            rank_value = float(parts["effective_rank"])
+            rank_value = float(
+                sum(parts["effective_rank"] for parts in step_parts) / HORIZON
+            )
             epoch_losses.append(loss_value)
             epoch_ranks.append(rank_value)
 
             metrics["step"].append(step)
             metrics["epoch"].append(epoch)
             metrics["loss"].append(loss_value)
-            metrics["latent_loss"].append(float(parts["latent_loss"]))
-            metrics["variance_loss"].append(float(parts["variance_loss"]))
-            metrics["covariance_loss"].append(float(parts["covariance_loss"]))
-            metrics["readout_loss"].append(float(parts["readout_loss"]))
+            metrics["latent_loss"].append(float(sum(parts["latent_loss"] for parts in step_parts) / HORIZON))
+            metrics["variance_loss"].append(float(sum(parts["variance_loss"] for parts in step_parts) / HORIZON))
+            metrics["covariance_loss"].append(float(sum(parts["covariance_loss"] for parts in step_parts) / HORIZON))
+            metrics["readout_loss"].append(float(sum(parts["readout_loss"] for parts in step_parts) / HORIZON))
             metrics["effective_rank"].append(rank_value)
 
             if json_progress:
@@ -156,6 +183,7 @@ def train_model(
         },
         "dataset": str(data_path),
         "samples": int(dataset["states"].shape[0]),
+        "horizon": HORIZON,
         "seed": seed,
     }
     feature_spec_path.write_text(json.dumps(feature_spec, indent=2), encoding="utf-8")

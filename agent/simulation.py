@@ -396,7 +396,6 @@ def resolve_config(args: argparse.Namespace) -> SimulationConfig:
         config = load_config_file(args.config, base=config)
 
     cli_overrides: dict[str, Any] = {
-        "rounds": args.rounds or args.simulation_rounds,
         "simulation_style": LEVEL_TO_STYLE[args.level] if args.level else None,
         "objective": args.objective,
         "industry": args.industry,
@@ -415,16 +414,13 @@ def simulate(
     current_market: str,
     company_type: str = "",
     strategic_action: str = "",
-    simulation_rounds: int | None = None,
     model_path: Path | None = None,
     company_profile: str | None = None,
     initial_action: str | None = None,
     json_progress: bool = False,
     config: SimulationConfig | None = None,
 ) -> dict[str, object]:
-    config = config or SimulationConfig(rounds=simulation_rounds or SimulationConfig().rounds)
-    if simulation_rounds is not None:
-        config = merge_config(config, {"rounds": simulation_rounds}, source="simulation_rounds")
+    config = config or SimulationConfig()
     validate_runtime_config(config)
 
     company_type = company_type or company_profile or "startup"
@@ -567,8 +563,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Company type taking the action.",
     )
     parser.add_argument("--strategic-action", default="", help="Strategic action to simulate.")
-    parser.add_argument("--simulation-rounds", type=int, help="Number of rounds to run.")
-    parser.add_argument("--rounds", type=int, help="Alias for --simulation-rounds.")
     parser.add_argument("--config", type=Path, help="Path to a simulation config JSON file.")
     parser.add_argument("--level", choices=sorted(LEVEL_TO_STYLE), help="Friendly simulation intensity.")
     parser.add_argument("--objective", help="Company objective to optimize the scenario around.")
