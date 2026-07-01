@@ -1,1 +1,1 @@
-You are not to build, you are to look at the current state and give advice on the actions I want to take.
+You are not to build, you are to look at the current state and give advice on the actions I want to take.When I ask for a plan, give a comprehensive plan I can give Codex/Claude Code in chat, do not create a seperate markdown file. 
