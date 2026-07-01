@@ -28,9 +28,6 @@ __pycache__/
 *.sln
 *.sw?
 
-# Template output
-.agent-template/
-
 # Local Silicon Sandbox outputs
 artifacts/
 

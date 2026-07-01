@@ -29,7 +29,7 @@ export interface CreateAgentSessionResult {
 
 export function createAgentSession(opts: CreateAgentSessionOptions = {}): CreateAgentSessionResult {
     const id = randomUUID();
-    const base = path.join(os.tmpdir(), `agent-template-${id}`);
+    const base = path.join(os.tmpdir(), `jepa-sandbox-${id}`);
     const scratchDir = opts.scratchDir ?? path.join(base, 'scratch');
     const outputDir = opts.outputDir ?? path.join(base, 'output');
 
@@ -42,7 +42,7 @@ export function createAgentSession(opts: CreateAgentSessionOptions = {}): Create
         scratchDir,
         outputDir,
         runConfig: {
-            agentName: opts.runConfig?.agentName ?? 'Template Agent',
+            agentName: opts.runConfig?.agentName ?? 'JEPA-Inspired Silicon Sandbox',
             defaultDelayMs: opts.runConfig?.defaultDelayMs ?? 750,
         },
         events: new EventEmitter(),
