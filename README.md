@@ -220,6 +220,18 @@ config JSON, launches `python -m agent.simulation` locally, and returns the fina
 Market Vision report path. It also includes diagnostic plot paths when they are
 available.
 
+### Run on OpenClaw's shipped Python
+
+For sandbox deployments, build a custom OpenClaw sandbox image that starts from
+OpenClaw's shipped `python3` base and bakes in this repo's `requirements.txt`.
+Then merge the sandbox config snippet from [deploy/](deploy/) into the
+operator's `openclaw.json`.
+
+The sandbox path keeps `network: "none"` and trains `agent/artifacts/model.pt`
+with `setupCommand` when the container is first created. The existing
+`run_market_simulation` TypeScript runner still uses the host-spawn path in this
+stage.
+
 ## Generated artifacts
 
 All Python artifacts live under `agent/artifacts/`.

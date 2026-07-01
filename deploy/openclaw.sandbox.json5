@@ -1,0 +1,17 @@
+{
+  agents: {
+    defaults: {
+      sandbox: {
+        mode: "all",
+        backend: "docker",
+        scope: "session",
+        workspaceAccess: "rw",              // this repo mounted at /workspace
+        docker: {
+          image: "openclaw-sandbox-jepa:bookworm-slim",
+          network: "none",                  // deps baked in; no egress
+          setupCommand: "cd /workspace && python3 -m agent.data.generate --samples 200 && python3 -m agent.train --epochs 5"
+        }
+      }
+    }
+  }
+}
