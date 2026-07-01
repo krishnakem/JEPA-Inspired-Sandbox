@@ -1,0 +1,25 @@
+{
+  "current_market": "AI coding assistants are rapidly growing and competitive",
+  "company_type": "startup",
+  "strategic_action": "launch a free coding agent",
+  "level": "medium",
+  "objective": "developer_adoption",
+  "industry": "AI",
+  "market_dimensions": [
+    "demand_growth",
+    "price_pressure",
+    "competition_intensity",
+    "customer_trust",
+    "platform_power",
+    "regulatory_pressure",
+    "margin_health",
+    "adoption_rate"
+  ],
+  "action_dimensions": [
+    "product_launch",
+    "price_cut",
+    "partnership",
+    "acquisition",
+    "repositioning"
+  ]
+}

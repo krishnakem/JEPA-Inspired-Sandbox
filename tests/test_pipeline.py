@@ -6,10 +6,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent.config import ROUNDS, SimulationConfig, load_config_file, merge_config
+from agent.config import (
+    DEFAULT_ACTION_DIMENSIONS,
+    DEFAULT_MARKET_DIMENSIONS,
+    ROUNDS,
+    SimulationConfig,
+    load_config_file,
+    merge_config,
+)
 from agent.data.generate import write_dataset
 from agent.report import SECTION_TITLES, write_report
-from agent.simulation import simulate
+from agent.simulation import load_demo_scenario, simulate
 
 
 class PipelineTest(unittest.TestCase):
@@ -74,6 +81,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(config.market_dimensions[0], "demand_growth")
         self.assertEqual(config.action_dimensions[-1], "repositioning")
         self.assertEqual(config.report_format, "strategy_memo")
+
+    def test_demo_scenario_uses_default_vector_shape(self) -> None:
+        scenario = load_demo_scenario()
+        self.assertEqual(scenario["market_dimensions"], DEFAULT_MARKET_DIMENSIONS)
+        self.assertEqual(scenario["action_dimensions"], DEFAULT_ACTION_DIMENSIONS)
 
     def test_custom_config_loads(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

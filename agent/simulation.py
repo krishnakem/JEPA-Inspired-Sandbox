@@ -83,6 +83,18 @@ def default_output_dir() -> Path:
     return Path("agent/artifacts/simulations")
 
 
+def demo_assets_dir() -> Path:
+    return Path(__file__).resolve().parent / "demo_assets"
+
+
+def demo_model_path() -> Path:
+    return demo_assets_dir() / "demo_model.pt"
+
+
+def demo_scenario_path() -> Path:
+    return demo_assets_dir() / "demo_scenario.json"
+
+
 def is_default_vector_shape(config: SimulationConfig) -> bool:
     return (
         config.market_dimensions == DEFAULT_MARKET_DIMENSIONS
@@ -410,6 +422,39 @@ def validate_runtime_config(config: SimulationConfig) -> None:
     validate_actors(config.actors)
 
 
+def load_demo_scenario() -> dict[str, Any]:
+    try:
+        scenario = json.loads(demo_scenario_path().read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(f"Demo scenario file not found: {demo_scenario_path()}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Demo scenario file is not valid JSON: {exc.msg}") from exc
+
+    required = {"current_market", "company_type", "strategic_action", "level", "objective", "industry"}
+    missing = sorted(required - set(scenario))
+    if missing:
+        raise ValueError(f"Demo scenario is missing required fields: {', '.join(missing)}")
+    return scenario
+
+
+def apply_demo_scenario(args: argparse.Namespace) -> None:
+    scenario = load_demo_scenario()
+    args.current_market = scenario["current_market"]
+    args.company_type = scenario["company_type"]
+    args.strategic_action = scenario["strategic_action"]
+    args.level = scenario["level"]
+    args.objective = scenario["objective"]
+    args.industry = scenario["industry"]
+    args.config = None
+
+    checkpoint = demo_model_path()
+    args.model = checkpoint if checkpoint.exists() else None
+    print(
+        ">>> DEMO MODE - fixed scenario, committed pretrained JEPA checkpoint.\n"
+        ">>> Reproduce the full pipeline: python3 -m agent.data.generate && python3 -m agent.train\n"
+    )
+
+
 def simulate(
     current_market: str,
     company_type: str = "",
@@ -555,7 +600,12 @@ def write_outputs(result: dict[str, object], output_dir: Path, output_format: st
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a local Silicon Sandbox market simulation.")
-    parser.add_argument("--current-market", required=True, help="Current market description.")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run a fixed showcase scenario against a committed pretrained model. No setup required.",
+    )
+    parser.add_argument("--current-market", help="Current market description.")
     parser.add_argument(
         "--company-type",
         choices=sorted(COMPANY_TYPE_PRIORS),
@@ -590,6 +640,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.demo:
+        try:
+            apply_demo_scenario(args)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+
+    if not args.current_market:
+        raise SystemExit("--current-market is required unless --demo is used")
+
     try:
         config = resolve_config(args)
     except ValueError as exc:

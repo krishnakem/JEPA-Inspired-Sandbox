@@ -3,15 +3,11 @@
 **Let a small business war-game a strategic move before making it — and watch a learned world model roll the market forward round by round.**
 
 ```bash
-python3 -m agent.simulation \
-  --current-market "AI coding assistants are rapidly growing and competitive" \
-  --company-type startup \
-  --strategic-action "launch a free coding agent" \
-  --objective developer_adoption \
-  --industry AI --level medium --format markdown
+python3 -m pip install -r requirements.txt
+python3 -m agent.simulation --demo
 ```
 
-That single command trains-or-loads a JEPA-inspired latent world model, rolls the market through four rounds of **company action → competitor response → customer reaction → investor/regulator pressure**, and writes a structured Market Vision report to disk. No hosted LLM, no API keys, fully local.
+The demo command loads a committed tiny JEPA checkpoint, rolls the market through four rounds of **company action → competitor response → customer reaction → investor/regulator pressure**, and writes a structured Market Vision report to disk. No hosted LLM, no API keys, fully local.
 
 ---
 
@@ -75,7 +71,19 @@ TypeScript only orchestrates. Every prediction, every regularizer, every diagnos
 # Python 3.10+  (torch, numpy, matplotlib — see requirements.txt)
 python3 -m pip install -r requirements.txt
 
-# Generate data + train (one-time; writes agent/artifacts/model.pt)
+# Reviewer demo: no training step required
+python3 -m agent.simulation --demo
+
+# Or via make
+make demo
+```
+
+The demo uses [`agent/demo_assets/demo_model.pt`](agent/demo_assets/demo_model.pt), a standard `torch.save` checkpoint produced by this repository's own model code. Treat it like any other PyTorch checkpoint from a source you trust.
+
+### Reproduce from scratch
+
+```bash
+# Generate data + train (writes agent/artifacts/model.pt)
 python3 -m agent.data.generate --samples 200
 python3 -m agent.train --epochs 5
 
