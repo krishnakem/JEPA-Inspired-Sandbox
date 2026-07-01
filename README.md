@@ -1,234 +1,108 @@
 # JEPA Silicon Sandbox
 
-A JEPA-inspired OpenClaw plugin exploring latent world models for multi-round
-strategic market forecasting.
+**Let a small business war-game a strategic move before making it — and watch a learned world model roll the market forward round by round.**
 
-## Vision
+```bash
+python3 -m agent.simulation \
+  --current-market "AI coding assistants are rapidly growing and competitive" \
+  --company-type startup \
+  --strategic-action "launch a free coding agent" \
+  --objective developer_adoption \
+  --industry AI --level medium --format markdown
+```
 
-JEPA Silicon Sandbox is a local market-vision forecasting MVP. A user
-describes a current market, a company type, and a strategic action. The system
-rolls the market forward through four rounds of company action,
-competitor response, customer reaction, and investor/regulator pressure, then
-returns a structured Market Vision report.
+That single command trains-or-loads a JEPA-inspired latent world model, rolls the market through four rounds of **company action → competitor response → customer reaction → investor/regulator pressure**, and writes a structured Market Vision report to disk. No hosted LLM, no API keys, fully local.
 
-The goal is not to predict public-market returns. This is not financial advice.
-It is a portfolio project for exploring how latent world models can support
-repeatable strategic scenario planning.
+---
 
-## What this project is
+## Why this exists
 
-- A local OpenClaw plugin for market scenario simulation.
-- A numeric market/action engine with fixed local defaults.
-- A Python-owned JEPA-inspired latent world model.
-- A deterministic report generator using templates, not hosted LLM prose.
-- An artifact-producing local workspace for reports, metrics, embeddings, and
-  plots.
-- A local-only system with no OpenAI, Anthropic, or hosted model API calls.
+Small and mid-sized business owners make irreversible competitive moves — cut a price, launch a product, enter a segment — with no way to rehearse how the market will react. Big companies pay strategy consultants to build these scenarios by hand. Everyone else guesses.
 
-## What this project is not
+Silicon Sandbox is my bet that a **learned world model** can do that rehearsal cheaply and repeatably. This repo is the JEPA branch of that bet: instead of asking an LLM to narrate a prediction, it keeps market state in numeric latent form and *predicts the next state* the way JEPA predicts future representations. Text is only the adapter — keyword encoding on the way in, deterministic templates on the way out.
 
-- Not financial advice or an investment recommendation engine.
-- Not a full reproduction of Meta JEPA.
-- Not an LLM wrapper.
-- Not a hosted API product.
-- Not a claim that synthetic market dynamics are real market truth.
+> This is a research MVP and portfolio artifact, not financial advice and not a claim that synthetic dynamics equal real markets. It is a working demonstration that the world-model approach produces coherent, multi-round strategic scenarios.
 
-## Why latent world models
+---
 
-Multi-round strategy is naturally stateful. A market move changes demand,
-competition, trust, pricing pressure, regulation, margins, and adoption. The
-next round should start from that changed world, not from the original prompt.
+## The ML, honestly
 
-This project keeps that world state in numeric latent form. Text is only the
-input/output adapter: keyword encoding on the way in, deterministic templates on
-the way out.
+The model in [`agent/model.py`](agent/model.py) is a genuine (small, local) JEPA, not an LLM wrapper:
 
-## Why JEPA-inspired
+| Component | Implementation |
+| --- | --- |
+| **Online + target encoder** | Two MLP encoders; the target is an EMA copy (`ema_decay=0.98`) updated with no gradient |
+| **Stop-gradient targets** | `encode_target()` runs under `torch.no_grad()` and `.detach()` — predictions chase a slow-moving target, not themselves |
+| **Action-conditioned predictor** | Predicts the *next latent* from `[latent_state, action]`, so strategy is a first-class input |
+| **Collapse guards** | VICReg-style variance floor + covariance penalty stop the encoder from mapping every market to the same point |
+| **Effective-rank diagnostic** | Entropy of the latent singular-value spectrum; a live readout that flags representational collapse before it ruins a run |
+| **Readout decoder** | Auxiliary only — used to *display* a latent as a human-readable state vector, never as the primary objective |
 
-The model predicts future latent representations rather than reconstructing raw
-market vectors as its main objective. The implementation includes:
+The whole thing has a built-in sanity check: `python3 -m agent.model` trains 12 steps and hard-fails if loss doesn't drop or effective rank collapses below 2.0. That guardrail is the point — representational collapse is the failure mode this project was built to demonstrate *and* defeat.
 
-- online encoder for current market state
-- target encoder with stop-gradient targets
-- action-conditioned latent predictor
-- variance and covariance collapse guards
-- effective-rank diagnostics
-- readout decoder used only to display state vectors
-
-That is JEPA-inspired, but intentionally small and local.
+---
 
 ## Architecture
 
 ```text
-OpenClaw / TypeScript
-  src/plugin/index.ts
-    marketsim_run_market_simulation, status, cancellation, reset
-  src/main/JepaSiliconSandboxRunner.ts
-    spawns the local Python simulator and streams progress events
+OpenClaw (TypeScript harness)
+  src/plugin/index.ts ............ registers marketsim_* tools
+  src/main/JepaSiliconSandboxRunner.ts .. spawns local python3, streams round events
 
-Python engine
-  agent/data/generate.py
-    numeric dataset and readable JSONL sidecar
-  agent/model.py
-    JEPA-inspired latent predictor
-  agent/train.py
-    training loop and standardized artifacts
-  agent/simulation.py
-    multi-round market rollout
-  agent/report.py
-    deterministic Market Vision reports
-  agent/plot.py
-    developer diagnostics
+Python engine (owns all ML + simulation)
+  agent/data/generate.py ......... synthetic market-transition dataset (+ readable JSONL)
+  agent/model.py ................. JEPA-inspired latent world model
+  agent/train.py ................. training loop, standardized artifacts
+  agent/simulation.py ............ 4-round market rollout
+  agent/report.py ................ deterministic Market Vision reports
+  agent/plot.py .................. latent-trajectory & collapse diagnostics
 
-Artifacts
-  agent/artifacts/
+agent/artifacts/ ................. model.pt, metrics.json, embeddings, reports, plots
 ```
 
-Python owns the model and simulation. TypeScript only orchestrates the local
-process for OpenClaw.
+TypeScript only orchestrates. Every prediction, every regularizer, every diagnostic lives in Python.
 
-## Example simulation
+## How a run works
 
-```bash
-python3 -m agent.simulation \
-  --current-market "AI coding assistants are rapidly growing and competitive" \
-  --company-type startup \
-  --strategic-action "launch a free coding agent" \
-  --objective developer_adoption \
-  --industry AI \
-  --level medium \
-  --format markdown
-```
+1. **Encode** the described market into a latent state vector.
+2. **Roll forward** four rounds. Each round conditions the predictor on the round's action and advances the *latent* world state, so round N+1 starts from the changed world, not the original prompt.
+3. **Read out** each round's latent for display and score the trajectory.
+4. **Report** a structured Market Vision memo (summary, strategic changes, competitive landscape, winners, risks, opportunities, round-by-round evolution, final state).
 
-## Installation
-
-Prerequisites:
-
-- Download and install Python if `python3 --version` does not work on your
-  machine. The Python installer is available at <https://www.python.org/downloads/>.
-- Install Node.js/npm for the JavaScript tooling.
-
-Install JavaScript dependencies:
+## Quickstart
 
 ```bash
-npm install
-```
-
-Install Python dependencies:
-
-```bash
+# Python 3.10+  (torch, numpy, matplotlib — see requirements.txt)
 python3 -m pip install -r requirements.txt
-```
 
-Run checks:
-
-```bash
-npm run typecheck
-npm run lint
-npm run test:plugin
-```
-
-## Standalone Python usage
-
-Generate the numeric dataset and readable JSONL sidecar:
-
-```bash
+# Generate data + train (one-time; writes agent/artifacts/model.pt)
 python3 -m agent.data.generate --samples 200
-```
-
-Train the JEPA-inspired model:
-
-```bash
 python3 -m agent.train --epochs 5
-```
 
-Run a market simulation and write a report:
-
-```bash
+# Run a simulation
 python3 -m agent.simulation \
   --current-market "AI coding assistants are rapidly growing and competitive" \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
   --objective developer_adoption \
-  --industry AI \
-  --level medium \
-  --format markdown
-```
+  --industry AI --level medium --format markdown
 
-Run with a different intensity:
-
-```bash
-python3 -m agent.simulation \
-  --current-market "AI coding assistants are growing quickly..." \
-  --company-type startup \
-  --strategic-action "launch a free coding agent" \
-  --objective developer_adoption \
-  --industry AI \
-  --level hard \
-  --format markdown
-```
-
-The supported levels are `light`, `medium`, and `hard`. They map to the existing
-simulation styles `conservative`, `base_case`, and `aggressive`. Every
-simulation runs exactly four rounds.
-
-`--company-type` must be one of `startup`, `incumbent`, `platform`, or
-`niche vendor`. Additional optional flags:
-
-- `--format {markdown,json}` selects the report file format (default `markdown`).
-- `--output-dir PATH` overrides where JSON and Markdown reports are written.
-- `--config PATH` loads a simulation config JSON (market/action dimensions,
-  actors, industry, style, objective, report format).
-- `--model PATH` points at a specific trained checkpoint; otherwise the default
-  `agent/artifacts/model.pt` is used when present.
-- `--json-progress` streams one compact JSON object per round to stdout (used by
-  the OpenClaw runner for progress events).
-
-Generate diagnostics:
-
-```bash
+# Diagnostics (latent trajectory, effective rank, collapse comparison)
 python3 -m agent.plot
 ```
 
-## OpenClaw usage
+**Levels:** `light` / `medium` / `hard` (map to conservative / base-case / aggressive intensity). Every run is exactly four rounds.
+**Company types:** `startup`, `incumbent`, `platform`, `niche vendor`.
 
-Install this repo as a linked OpenClaw plugin:
+## Running it as an OpenClaw tool
+
+Silicon Sandbox runs inside [OpenClaw](https://openclaw.ai) as a host-only plugin so an agent can call it in natural language. Install linked:
 
 ```bash
 openclaw plugins install /absolute/path/to/jepa-silicon-sandbox --link
 ```
 
-This is a host-only plugin. `marketsim_run_market_simulation` launches the
-local `python3` runtime from this checkout, so the host running the OpenClaw
-gateway needs the Python dependencies and trained model artifact in place:
-
-```bash
-python3 -m pip install -r requirements.txt
-test -f agent/artifacts/model.pt || {
-  python3 -m agent.data.generate --samples 200
-  python3 -m agent.train --epochs 5
-}
-```
-
-The plugin exposes five tools:
-
-```text
-marketsim_run_market_simulation   start a fixed 4-round run in the background
-marketsim_get_session_status      poll a run for progress and final report paths
-marketsim_stop_run                request cooperative cancellation of a run
-marketsim_end_session             tear down a session when the user is done
-marketsim_reset_all               clear scratch and output directories (confirm required)
-```
-
-The common flow is:
-
-```text
-marketsim_run_market_simulation
-marketsim_get_session_status
-marketsim_end_session
-```
-
-`marketsim_run_market_simulation` expects:
+Five tools are exposed; the common flow is `marketsim_run_market_simulation → marketsim_get_session_status → marketsim_end_session`. The run tool takes the same fields as the CLI:
 
 ```json
 {
@@ -241,41 +115,25 @@ marketsim_end_session
 }
 ```
 
-`company_type` must be `startup`, `incumbent`, `platform`, or `niche vendor`.
-`level` must be `light`, `medium`, or `hard`. The run tool creates a session,
-returns its `session_id`, writes a temporary config JSON, launches
-`python3 -m agent.simulation` locally, and returns immediately. The simulation
-always runs exactly four rounds. Poll
-`marketsim_get_session_status` with that `session_id` until `run_status` is
-`completed`; the result includes the final Market Vision report path and
-diagnostic plot paths when they are available. Call `marketsim_stop_run` with the
-`session_id` to cancel an in-flight run cooperatively, and `marketsim_end_session`
-when the user is done. `marketsim_reset_all` clears the scratch and output
-directories; it is a dry run unless called with `{ "confirm": true }`.
+The host needs the Python deps and a trained `agent/artifacts/model.pt` in place before the plugin can run.
 
-## Generated artifacts
+## Where this sits in the bigger project
 
-All Python artifacts live under `agent/artifacts/`.
+Silicon Sandbox has two experimental branches exploring the same thesis:
 
-```text
-agent/artifacts/data/market_transitions.npz
-agent/artifacts/data/market_transitions.json
-agent/artifacts/data/market_transitions.jsonl
-agent/artifacts/model.pt
-agent/artifacts/metrics.json
-agent/artifacts/embeddings.npy
-agent/artifacts/feature_spec.json
-agent/artifacts/simulations/market-vision-*.md
-agent/artifacts/plots/latent_trajectory.png
-agent/artifacts/plots/effective_rank.png
-agent/artifacts/plots/collapse_comparison.png
-```
+- **This repo (JEPA branch)** — a learned latent world model. Strong on *representation* and multi-round state; deliberately not an LLM.
+- **[SME_MVP](https://github.com/krishnakem/SME_MVP) (LLM branch)** — LLM agents with explicit cognitive profiles. Strong on *interpretable competitor reasoning*; weaker on learned dynamics.
 
-## Future roadmap
+The open research question is which representation better predicts real incumbent retaliation — a question I'm pursuing as a research assistant at the Ross School of Business.
 
-- Add richer deterministic text adapters for market descriptions.
-- Expand the synthetic transition generator with more industry-specific regimes.
-- Add validation sets and stronger collapse/robustness gates.
-- Improve OpenClaw progress events if the Python simulator gains JSON progress.
-- Add richer report comparisons across multiple strategic actions.
-- Package a small demo dataset and screenshots for portfolio presentation.
+## Roadmap
+
+- Richer deterministic text adapters for market descriptions
+- Industry-specific transition regimes in the synthetic generator
+- Validation sets and stronger collapse/robustness gates
+- Multi-action report comparisons (A/B a strategy)
+- A packaged demo dataset + screenshots for portfolio review
+
+## License
+
+See repository. Research/portfolio use.
