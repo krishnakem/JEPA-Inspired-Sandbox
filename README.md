@@ -22,7 +22,8 @@ repeatable strategic scenario planning.
   5-dimension action vectors.
 - A Python-owned JEPA-inspired latent world model.
 - A deterministic report generator using templates, not hosted LLM prose.
-- An artifact-producing sandbox for reports, metrics, embeddings, and plots.
+- An artifact-producing local workspace for reports, metrics, embeddings, and
+  plots.
 - A local-only system with no OpenAI, Anthropic, or hosted model API calls.
 
 ## What this project is not
@@ -62,8 +63,7 @@ That is JEPA-inspired, but intentionally small and local.
 ```text
 OpenClaw / TypeScript
   src/plugin/index.ts
-    marketsim_start_session, marketsim_run_market_simulation, status,
-    cancellation, reset
+    marketsim_run_market_simulation, status, cancellation, reset
   src/main/JepaInspiredSiliconSandboxRunner.ts
     spawns the local Python simulator and streams progress events
 
@@ -91,7 +91,7 @@ process for OpenClaw.
 ## Example simulation
 
 ```bash
-python -m agent.simulation \
+python3 -m agent.simulation \
   --current-market "AI coding assistants are rapidly growing and competitive" \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
@@ -101,9 +101,6 @@ python -m agent.simulation \
   --level medium \
   --format markdown
 ```
-
-If your system does not provide a `python` alias, use `python3` for the same
-commands.
 
 ## Installation
 
@@ -116,7 +113,7 @@ npm install
 Install Python dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 Run checks:
@@ -132,19 +129,19 @@ npm run test:plugin
 Generate the numeric dataset and readable JSONL sidecar:
 
 ```bash
-python -m agent.data.generate --samples 200
+python3 -m agent.data.generate --samples 200
 ```
 
 Train the JEPA-inspired model:
 
 ```bash
-python -m agent.train --epochs 5
+python3 -m agent.train --epochs 5
 ```
 
 Run a market simulation and write a report:
 
 ```bash
-python -m agent.simulation \
+python3 -m agent.simulation \
   --current-market "AI coding assistants are rapidly growing and competitive" \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
@@ -158,7 +155,7 @@ python -m agent.simulation \
 Run with a different intensity:
 
 ```bash
-python -m agent.simulation \
+python3 -m agent.simulation \
   --current-market "AI coding assistants are growing quickly..." \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
@@ -175,7 +172,7 @@ simulation styles `conservative`, `base_case`, and `aggressive`.
 Generate diagnostics:
 
 ```bash
-python -m agent.plot
+python3 -m agent.plot
 ```
 
 ## OpenClaw usage
@@ -186,14 +183,21 @@ Install this repo as a linked OpenClaw plugin:
 openclaw plugins install /absolute/path/to/JEPA-Inspired-Sandbox --link
 ```
 
-Sandbox deployments should use the `market-vision` skill as the canonical run
-path. The skill invokes OpenClaw's sandboxed `exec` tool from `/workspace`, so it
-uses the sandbox image's shipped `python3` and does not require host Python.
+This is a host-only plugin. `marketsim_run_market_simulation` launches the
+local `python3` runtime from this checkout, so the host running the OpenClaw
+gateway needs the Python dependencies and trained model artifact in place:
 
-The plugin tool flow is a host-only development fallback:
+```bash
+python3 -m pip install -r requirements.txt
+test -f agent/artifacts/model.pt || {
+  python3 -m agent.data.generate --samples 200
+  python3 -m agent.train --epochs 5
+}
+```
+
+The plugin tool flow is:
 
 ```text
-marketsim_start_session
 marketsim_run_market_simulation
 marketsim_get_session_status
 marketsim_end_session
@@ -203,7 +207,6 @@ marketsim_end_session
 
 ```json
 {
-  "session_id": "session returned by marketsim_start_session",
   "current_market": "AI coding assistants are rapidly growing and competitive",
   "strategic_action": "launch a free coding agent",
   "company_type": "startup",
@@ -215,22 +218,13 @@ marketsim_end_session
 ```
 
 `company_type` must be `startup`, `incumbent`, `platform`, or `niche vendor`.
-`level` must be `light`, `medium`, or `hard`. The runner writes a temporary
-config JSON, launches `python -m agent.simulation` locally, and returns the final
-Market Vision report path. It also includes diagnostic plot paths when they are
-available. Use it only when host-side Python execution is acceptable.
-
-### Run on OpenClaw's shipped Python
-
-For sandbox deployments, build a custom OpenClaw sandbox image that starts from
-OpenClaw's shipped `python3` base and bakes in this repo's `requirements.txt`.
-Then merge the sandbox config snippet from [deploy/](deploy/) into the
-operator's `openclaw.json` and run simulations through
-[skills/market-vision/SKILL.md](skills/market-vision/SKILL.md).
-
-The sandbox path keeps `network: "none"` and trains `agent/artifacts/model.pt`
-with `setupCommand` when the container is first created. The existing
-`marketsim_run_market_simulation` TypeScript runner is intentionally host-only.
+`level` must be `light`, `medium`, or `hard`. The run tool creates a session,
+returns its `session_id`, writes a temporary config JSON, launches
+`python3 -m agent.simulation` locally, and returns immediately. Poll
+`marketsim_get_session_status` with that `session_id` until `run_status` is
+`completed`; the result includes the final Market Vision report path and
+diagnostic plot paths when they are available. Call `marketsim_end_session` when
+the user is done.
 
 ## Generated artifacts
 
