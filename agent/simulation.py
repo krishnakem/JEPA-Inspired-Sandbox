@@ -23,7 +23,6 @@ from agent.config import (
     validate_config,
 )
 from agent.report import write_report
-from agent.shocks import ShockEvent, schedule_shocks, validate_shock_names
 
 
 COMPANY_TYPE_PRIORS = {
@@ -342,37 +341,6 @@ def evolve_configured_market(
     return np.clip(state + delta.reshape(1, -1), 0.0, 1.0).astype(np.float32)
 
 
-def apply_shocks(
-    state: np.ndarray,
-    shocks: list[ShockEvent],
-    round_index: int,
-    config: SimulationConfig,
-) -> tuple[np.ndarray, list[dict[str, Any]]]:
-    applied = [shock for shock in shocks if shock.round == round_index]
-    if not applied:
-        return state, []
-
-    next_state = state.copy()
-    applied_records = []
-    for shock in applied:
-        matched_effects: dict[str, float] = {}
-        for dimension, amount in shock.effects.items():
-            index = _dimension_index(config.market_dimensions, dimension)
-            if index is None:
-                continue
-            next_state[0, index] += amount
-            matched_effects[dimension] = amount
-        applied_records.append(
-            {
-                "name": shock.name,
-                "round": shock.round,
-                "effects": matched_effects,
-                "explanation": shock.explanation,
-            }
-        )
-    return np.clip(next_state, 0.0, 1.0).astype(np.float32), applied_records
-
-
 def state_to_dict(state: np.ndarray, config: SimulationConfig | None = None) -> dict[str, float]:
     config = config or SimulationConfig()
     values = state.reshape(-1)
@@ -397,17 +365,13 @@ def describe_shift(
     previous_state: np.ndarray,
     next_state: np.ndarray,
     config: SimulationConfig | None = None,
-    shocks: list[dict[str, Any]] | None = None,
 ) -> str:
     config = config or SimulationConfig()
     delta = next_state.reshape(-1) - previous_state.reshape(-1)
     strongest = int(np.argmax(np.abs(delta)))
     direction = "rises" if delta[strongest] >= 0 else "softens"
     feature = config.market_dimensions[strongest].replace("_", " ")
-    shock_note = ""
-    if shocks:
-        shock_note = f"; shock applied: {', '.join(item['name'] for item in shocks)}"
-    return f"{feature} {direction} by {abs(float(delta[strongest])):.2f}{shock_note}"
+    return f"{feature} {direction} by {abs(float(delta[strongest])):.2f}"
 
 
 def confidence_score(
@@ -445,7 +409,6 @@ def resolve_config(args: argparse.Namespace) -> SimulationConfig:
 def validate_runtime_config(config: SimulationConfig) -> None:
     validate_config(config)
     validate_actors(config.actors)
-    validate_shock_names(config.shock_events)
 
 
 def simulate(
@@ -468,7 +431,6 @@ def simulate(
     strategic_action = strategic_action or initial_action or "reposition the company"
     state = encode_initial_state(current_market, company_type, config)
     base_action = encode_action(strategic_action, config)
-    shocks = schedule_shocks(config.shock_events, config.rounds)
     model = None
     latent = None
 
@@ -505,7 +467,6 @@ def simulate(
             "updated_market_state": state_to_dict(state, config),
             "confidence": 1.0,
             "summary": "Initial market representation.",
-            "shocks": [],
         }
     ]
 
@@ -529,17 +490,15 @@ def simulate(
                 latent = model.encode_state(prediction)
             state = prediction.numpy().astype(np.float32)
 
-        state, applied_shocks = apply_shocks(state, shocks, round_index, config)
         round_record = {
             "round": round_index,
             "actor": actor,
             "actor_role": get_actor_profile(actor).role,
             "action_or_reaction": describe_action(actor, strategic_action, action, config),
-            "predicted_market_shift": describe_shift(previous_state, state, config, applied_shocks),
+            "predicted_market_shift": describe_shift(previous_state, state, config),
             "updated_market_state": state_to_dict(state, config),
             "confidence": confidence_score(previous_state, state, action, model is not None),
             "summary": summarize_round(state, config),
-            "shocks": applied_shocks,
         }
         rounds.append(round_record)
         if json_progress:
@@ -550,7 +509,6 @@ def simulate(
                     "actor": round_record["actor"],
                     "confidence": round_record["confidence"],
                     "summary": round_record["summary"],
-                    "shocks": [item["name"] for item in applied_shocks],
                 }
             )
 
@@ -573,8 +531,6 @@ def simulate(
             "market_dimensions": config.market_dimensions,
             "action_dimensions": config.action_dimensions,
             "actors": config.actors,
-            "shock_events": config.shock_events,
-            "scheduled_shocks": [shock.__dict__ for shock in shocks],
         },
         "action_vector": {
             feature: round(float(base_action.reshape(-1)[index]), 4)

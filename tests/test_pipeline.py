@@ -122,7 +122,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(config.simulation_style, "regulated")
         self.assertEqual(config.report_format, "risk_report")
 
-    def test_custom_dimensions_actors_shocks_and_report_format(self) -> None:
+    def test_custom_dimensions_actors_and_report_format(self) -> None:
         config = SimulationConfig(
             market_dimensions=[
                 "developer_adoption",
@@ -139,7 +139,6 @@ class PipelineTest(unittest.TestCase):
             industry="AI",
             rounds=3,
             simulation_style="aggressive",
-            shock_events=["open_source_breakthrough@2"],
             objective="developer_adoption",
             report_format="founder_memo",
         )
@@ -155,7 +154,6 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(list(result["rounds"][-1]["updated_market_state"]), config.market_dimensions)
         self.assertEqual(list(result["action_vector"]), config.action_dimensions)
         self.assertEqual([round_["actor"] for round_ in result["rounds"][1:]], config.actors)
-        self.assertEqual(result["rounds"][2]["shocks"][0]["name"], "open_source_breakthrough")
 
         with tempfile.TemporaryDirectory() as tmp:
             report_path = write_report(result, Path(tmp), "markdown")

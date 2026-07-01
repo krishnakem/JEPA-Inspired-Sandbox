@@ -67,7 +67,6 @@ CONFIG_FIELDS = {
     "industry",
     "rounds",
     "simulation_style",
-    "shock_events",
     "objective",
     "report_format",
 }
@@ -83,7 +82,6 @@ class SimulationConfig:
     industry: str = "AI"
     rounds: int = 4
     simulation_style: str = "base_case"
-    shock_events: list[str] = field(default_factory=list)
     objective: str = "market_share"
     report_format: str = "strategy_memo"
 
@@ -129,8 +127,6 @@ def validate_config(config: SimulationConfig) -> None:
     _validate_string_list(config.market_dimensions, "market_dimensions", require_dimensions=True)
     _validate_string_list(config.action_dimensions, "action_dimensions", require_dimensions=True)
     _validate_string_list(config.actors, "actors")
-    _validate_string_list(config.shock_events, "shock_events", allow_empty=True)
-
     if config.rounds < 1:
         raise ValueError("rounds must be at least 1")
     if not config.industry.strip():

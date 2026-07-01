@@ -76,14 +76,6 @@ def _format_list(values: list[str]) -> str:
     return ", ".join(_label(value) for value in values) if values else "none"
 
 
-def _format_shocks(config: dict[str, Any], result: dict[str, Any]) -> str:
-    scheduled = result.get("artifact_metadata", {}).get("scheduled_shocks", [])
-    if scheduled:
-        parts = [f"{item['name']} in round {item['round']}" for item in scheduled]
-        return ", ".join(parts)
-    return _format_list(config.get("shock_events", []))
-
-
 def build_report(result: dict[str, Any]) -> dict[str, Any]:
     inputs = result["inputs"]
     config = result.get("config", {})
@@ -132,7 +124,6 @@ def build_report(result: dict[str, Any]) -> dict[str, Any]:
                 f"Objective: {_label(objective)}",
                 f"Report format: {_label(report_format)}",
                 f"Active actors: {_format_list(config.get('actors', []))}",
-                f"Shock events: {_format_shocks(config, result)}",
                 f"Market dimensions: {_format_list(config.get('market_dimensions', []))}",
                 f"Action dimensions: {_format_list(config.get('action_dimensions', []))}",
             ]
