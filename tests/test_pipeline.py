@@ -8,7 +8,6 @@ from pathlib import Path
 
 from agent.config import SimulationConfig, load_config_file, merge_config
 from agent.data.generate import write_dataset
-from agent.presets import preset_config
 from agent.report import SECTION_TITLES, write_report
 from agent.simulation import simulate
 
@@ -95,8 +94,24 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(config.market_dimensions, ["developer_adoption", "enterprise_trust"])
         self.assertEqual(config.rounds, 3)
 
-    def test_preset_and_cli_override_priority(self) -> None:
-        config = preset_config("ai_startup")
+    def test_merge_config_override_priority(self) -> None:
+        config = SimulationConfig(
+            industry="AI",
+            market_dimensions=[
+                "developer_adoption",
+                "enterprise_trust",
+                "switching_cost",
+                "open_source_momentum",
+            ],
+            action_dimensions=[
+                "open_source_release",
+                "enterprise_push",
+                "price_cut",
+            ],
+            actors=["startup", "developers"],
+            objective="developer_adoption",
+            simulation_style="aggressive",
+        )
         config = merge_config(
             config,
             {"rounds": 2, "simulation_style": "regulated", "report_format": "risk_report"},

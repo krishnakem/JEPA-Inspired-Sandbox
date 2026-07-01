@@ -20,10 +20,8 @@ from agent.config import (
     SimulationConfig,
     load_config_file,
     merge_config,
-    parse_csv_list,
     validate_config,
 )
-from agent.presets import PRESETS, preset_config
 from agent.report import write_report
 from agent.shocks import ShockEvent, schedule_shocks, validate_shock_names
 
@@ -430,21 +428,14 @@ def print_json_progress(payload: dict[str, object]) -> None:
 
 def resolve_config(args: argparse.Namespace) -> SimulationConfig:
     config = SimulationConfig()
-    if args.preset:
-        config = preset_config(args.preset, config)
     if args.config:
         config = load_config_file(args.config, base=config)
 
     cli_overrides: dict[str, Any] = {
         "rounds": args.rounds or args.simulation_rounds,
-        "simulation_style": LEVEL_TO_STYLE[args.level] if args.level else args.simulation_style,
-        "actors": parse_csv_list(args.actors),
-        "market_dimensions": parse_csv_list(args.market_dimensions),
-        "action_dimensions": parse_csv_list(args.action_dimensions),
-        "shock_events": parse_csv_list(args.shock_events),
+        "simulation_style": LEVEL_TO_STYLE[args.level] if args.level else None,
         "objective": args.objective,
         "industry": args.industry,
-        "report_format": args.report_format,
     }
     config = merge_config(config, cli_overrides, source="CLI flags")
     validate_runtime_config(config)
@@ -619,22 +610,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Company type taking the action.",
     )
-    parser.add_argument("--company-profile", help="Alias for company type/profile.")
     parser.add_argument("--strategic-action", default="", help="Strategic action to simulate.")
-    parser.add_argument("--initial-action", help="Alias for the initial strategic action.")
     parser.add_argument("--simulation-rounds", type=int, help="Number of rounds to run.")
     parser.add_argument("--rounds", type=int, help="Alias for --simulation-rounds.")
     parser.add_argument("--config", type=Path, help="Path to a simulation config JSON file.")
-    parser.add_argument("--preset", choices=sorted(PRESETS), help="Built-in simulation preset.")
-    parser.add_argument("--simulation-style", help="Simulation style/personality.")
     parser.add_argument("--level", choices=sorted(LEVEL_TO_STYLE), help="Friendly simulation intensity.")
-    parser.add_argument("--actors", help="Comma-separated actor list.")
-    parser.add_argument("--market-dimensions", help="Comma-separated market dimension names.")
-    parser.add_argument("--action-dimensions", help="Comma-separated action dimension names.")
-    parser.add_argument("--shock-events", help="Comma-separated shock event names, optionally name@round.")
     parser.add_argument("--objective", help="Company objective to optimize the scenario around.")
     parser.add_argument("--industry", help="Industry context for the scenario.")
-    parser.add_argument("--report-format", help="Narrative report format, such as founder_memo.")
     parser.add_argument("--model", type=Path, help="Optional trained model checkpoint.")
     parser.add_argument(
         "--format",
@@ -675,8 +657,6 @@ def main() -> None:
         company_type=args.company_type,
         strategic_action=args.strategic_action,
         model_path=model_path,
-        company_profile=args.company_profile,
-        initial_action=args.initial_action,
         json_progress=args.json_progress,
         config=config,
     )
