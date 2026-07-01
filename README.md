@@ -102,6 +102,12 @@ python3 -m agent.simulation \
 
 ## Installation
 
+Prerequisites:
+
+- Download and install Python if `python3 --version` does not work on your
+  machine. The Python installer is available at <https://www.python.org/downloads/>.
+- Install Node.js/npm for the JavaScript tooling.
+
 Install JavaScript dependencies:
 
 ```bash
@@ -166,6 +172,18 @@ The supported levels are `light`, `medium`, and `hard`. They map to the existing
 simulation styles `conservative`, `base_case`, and `aggressive`. Every
 simulation runs exactly four rounds.
 
+`--company-type` must be one of `startup`, `incumbent`, `platform`, or
+`niche vendor`. Additional optional flags:
+
+- `--format {markdown,json}` selects the report file format (default `markdown`).
+- `--output-dir PATH` overrides where JSON and Markdown reports are written.
+- `--config PATH` loads a simulation config JSON (market/action dimensions,
+  actors, industry, style, objective, report format).
+- `--model PATH` points at a specific trained checkpoint; otherwise the default
+  `agent/artifacts/model.pt` is used when present.
+- `--json-progress` streams one compact JSON object per round to stdout (used by
+  the OpenClaw runner for progress events).
+
 Generate diagnostics:
 
 ```bash
@@ -192,7 +210,17 @@ test -f agent/artifacts/model.pt || {
 }
 ```
 
-The plugin tool flow is:
+The plugin exposes five tools:
+
+```text
+marketsim_run_market_simulation   start a fixed 4-round run in the background
+marketsim_get_session_status      poll a run for progress and final report paths
+marketsim_stop_run                request cooperative cancellation of a run
+marketsim_end_session             tear down a session when the user is done
+marketsim_reset_all               clear scratch and output directories (confirm required)
+```
+
+The common flow is:
 
 ```text
 marketsim_run_market_simulation
@@ -220,8 +248,10 @@ returns its `session_id`, writes a temporary config JSON, launches
 always runs exactly four rounds. Poll
 `marketsim_get_session_status` with that `session_id` until `run_status` is
 `completed`; the result includes the final Market Vision report path and
-diagnostic plot paths when they are available. Call `marketsim_end_session` when
-the user is done.
+diagnostic plot paths when they are available. Call `marketsim_stop_run` with the
+`session_id` to cancel an in-flight run cooperatively, and `marketsim_end_session`
+when the user is done. `marketsim_reset_all` clears the scratch and output
+directories; it is a dry run unless called with `{ "confirm": true }`.
 
 ## Generated artifacts
 
