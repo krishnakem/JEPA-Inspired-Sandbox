@@ -9,18 +9,12 @@ import { type AgentRunResult, type AgentRunner, throwIfAborted } from './AgentRu
 
 export interface MarketSimulationInput {
     currentMarket: string;
-    companyType?: string;
-    companyProfile?: string;
+    companyType: string;
     strategicAction: string;
     simulationRounds?: number;
-    preset?: string;
     simulationStyle?: string;
-    actors?: string[];
-    marketDimensions?: string[];
-    actionDimensions?: string[];
-    shockEvents?: string[];
     objective?: string;
-    reportFormat?: string;
+    industry?: string;
 }
 
 interface ProcessResult {
@@ -52,10 +46,9 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         const startedAt = Date.now();
         this.session.events.emit('run-started', {
             current_market: input.currentMarket,
-            company_type: input.companyType ?? input.companyProfile ?? 'startup',
+            company_type: input.companyType,
             strategic_action: input.strategicAction,
             simulation_rounds: input.simulationRounds ?? null,
-            preset: input.preset ?? null,
             simulation_style: input.simulationStyle ?? null,
         });
 
@@ -124,12 +117,6 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         ];
         if (input.companyType) {
             args.push('--company-type', input.companyType);
-        }
-        if (input.companyProfile) {
-            args.push('--company-profile', input.companyProfile);
-        }
-        if (input.preset) {
-            args.push('--preset', input.preset);
         }
         if (configPath) {
             args.push('--config', configPath);
@@ -213,12 +200,8 @@ export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimul
         const config: Record<string, unknown> = {};
         if (input.simulationRounds) config.rounds = input.simulationRounds;
         if (input.simulationStyle) config.simulation_style = input.simulationStyle;
-        if (input.actors?.length) config.actors = input.actors;
-        if (input.marketDimensions?.length) config.market_dimensions = input.marketDimensions;
-        if (input.actionDimensions?.length) config.action_dimensions = input.actionDimensions;
-        if (input.shockEvents?.length) config.shock_events = input.shockEvents;
         if (input.objective) config.objective = input.objective;
-        if (input.reportFormat) config.report_format = input.reportFormat;
+        if (input.industry) config.industry = input.industry;
 
         if (Object.keys(config).length === 0) return null;
 

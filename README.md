@@ -94,7 +94,10 @@ python -m agent.simulation \
   --current-market "AI coding assistants are rapidly growing and competitive" \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
+  --objective developer_adoption \
+  --industry AI \
   --simulation-rounds 4 \
+  --level medium \
   --format markdown
 ```
 
@@ -144,39 +147,29 @@ python -m agent.simulation \
   --current-market "AI coding assistants are rapidly growing and competitive" \
   --company-type startup \
   --strategic-action "launch a free coding agent" \
+  --objective developer_adoption \
+  --industry AI \
   --simulation-rounds 4 \
+  --level medium \
   --format markdown
 ```
 
-Run with a built-in preset and configurable simulation fields:
+Run with a different intensity:
 
 ```bash
 python -m agent.simulation \
-  --preset ai_startup \
   --current-market "AI coding assistants are growing quickly..." \
-  --company-profile "open-source startup" \
+  --company-type startup \
   --strategic-action "launch a free coding agent" \
-  --rounds 5 \
-  --simulation-style aggressive \
-  --actors startup,incumbent,developers,enterprise_buyers,investors \
-  --shock-events incumbent_price_war,open_source_breakthrough \
   --objective developer_adoption \
-  --report-format founder_memo
+  --industry AI \
+  --rounds 5 \
+  --level hard \
+  --format markdown
 ```
 
-Load a JSON config file:
-
-```bash
-python -m agent.simulation \
-  --config examples/configs/ai_startup.json \
-  --current-market "AI coding assistants are growing quickly..." \
-  --company-profile "open-source startup" \
-  --strategic-action "launch a free coding agent"
-```
-
-Built-in presets are `ai_startup`, `saas_enterprise`, `consumer_tech`, `retail`,
-`manufacturing`, and `fintech`. Config priority is base defaults, then preset,
-then config file, then CLI flags.
+The supported levels are `light`, `medium`, and `hard`. They map to the existing
+simulation styles `conservative`, `base_case`, and `aggressive`.
 
 Generate diagnostics:
 
@@ -211,15 +204,17 @@ end_session
 {
   "session_id": "session returned by start_session",
   "current_market": "AI coding assistants are rapidly growing and competitive",
-  "company_type": "startup",
   "strategic_action": "launch a free coding agent",
-  "simulation_rounds": 4
+  "company_type": "startup",
+  "objective": "developer_adoption",
+  "industry": "AI",
+  "rounds": 4,
+  "level": "medium"
 }
 ```
 
-Optional fields include `company_profile`, `preset`, `rounds`,
-`simulation_style`, `actors`, `market_dimensions`, `action_dimensions`,
-`shock_events`, `objective`, and `report_format`. The runner writes a temporary
+`company_type` must be `startup`, `incumbent`, `platform`, or `niche vendor`.
+`level` must be `light`, `medium`, or `hard`. The runner writes a temporary
 config JSON, launches `python -m agent.simulation` locally, and returns the final
 Market Vision report path. It also includes diagnostic plot paths when they are
 available. Use it only when host-side Python execution is acceptable.

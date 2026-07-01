@@ -13,9 +13,12 @@ No host Python is required.
 Required inputs:
 
 - current market
-- company type
 - strategic action
+- company type
+- objective
+- industry
 - number of rounds
+- level
 
 ## Preconditions
 
@@ -44,9 +47,13 @@ Run the engine through the sandboxed `exec` tool:
 ```bash
 cd /workspace && python3 -m agent.simulation \
   --current-market "<CURRENT_MARKET>" \
-  --company-type "<COMPANY_TYPE>" \
   --strategic-action "<STRATEGIC_ACTION>" \
-  --simulation-rounds <N> --format markdown
+  --company-type "<COMPANY_TYPE>" \
+  --objective "<OBJECTIVE>" \
+  --industry "<INDUSTRY>" \
+  --simulation-rounds <N> \
+  --level "<LEVEL>" \
+  --format markdown
 ```
 
 ## Present Report

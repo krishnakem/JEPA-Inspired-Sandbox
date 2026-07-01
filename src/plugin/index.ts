@@ -100,39 +100,49 @@ function asOptionalString(params: Record<string, unknown>, key: string): string 
     return trimmed || undefined;
 }
 
-function asStringList(params: Record<string, unknown>, key: string): string[] | undefined {
-    const value = params[key];
-    if (typeof value === 'string') {
-        const items = value.split(',').map((item) => item.trim()).filter(Boolean);
-        return items.length ? items : undefined;
+function asRequiredEnum<T extends string>(
+    params: Record<string, unknown>,
+    key: string,
+    allowed: readonly T[]
+): T {
+    const value = asRequiredString(params, key);
+    if (!allowed.includes(value as T)) {
+        throw new Error(`run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
     }
-    if (Array.isArray(value)) {
-        const items = value
-            .filter((item): item is string => typeof item === 'string')
-            .map((item) => item.trim())
-            .filter(Boolean);
-        return items.length ? items : undefined;
-    }
-    return undefined;
+    return value as T;
 }
 
+function asOptionalEnum<T extends string>(
+    params: Record<string, unknown>,
+    key: string,
+    allowed: readonly T[],
+    fallback: T
+): T {
+    const value = asOptionalString(params, key);
+    if (!value) return fallback;
+    if (!allowed.includes(value as T)) {
+        throw new Error(`run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
+    }
+    return value as T;
+}
+
+const COMPANY_TYPES = ['startup', 'incumbent', 'platform', 'niche vendor'] as const;
+const LEVEL_TO_STYLE = {
+    light: 'conservative',
+    medium: 'base_case',
+    hard: 'aggressive',
+} as const;
+
 function parseRunInput(params: Record<string, unknown>): MarketSimulationInput {
-    const companyType = asOptionalString(params, 'company_type');
-    const companyProfile = asOptionalString(params, 'company_profile');
+    const level = asOptionalEnum(params, 'level', ['light', 'medium', 'hard'] as const, 'medium');
     return {
         currentMarket: asRequiredString(params, 'current_market'),
-        companyType,
-        companyProfile,
+        companyType: asRequiredEnum(params, 'company_type', COMPANY_TYPES),
         strategicAction: asRequiredString(params, 'strategic_action'),
-        simulationRounds: asPositiveInteger(params.rounds ?? params.simulation_rounds, 4, 12),
-        preset: asOptionalString(params, 'preset'),
-        simulationStyle: asOptionalString(params, 'simulation_style'),
-        actors: asStringList(params, 'actors'),
-        marketDimensions: asStringList(params, 'market_dimensions'),
-        actionDimensions: asStringList(params, 'action_dimensions'),
-        shockEvents: asStringList(params, 'shock_events'),
-        objective: asOptionalString(params, 'objective'),
-        reportFormat: asOptionalString(params, 'report_format'),
+        simulationRounds: asPositiveInteger(params.rounds, 4, 12),
+        simulationStyle: LEVEL_TO_STYLE[level],
+        objective: asOptionalString(params, 'objective') ?? 'market_share',
+        industry: asOptionalString(params, 'industry') ?? 'AI',
     };
 }
 
@@ -217,70 +227,32 @@ export function register(api: PluginApi): () => void {
                 },
                 company_type: {
                     type: 'string',
-                    description: 'Company type or profile, such as startup, incumbent, platform, or niche vendor.',
-                },
-                company_profile: {
-                    type: 'string',
-                    description: 'Alias for company_type, useful for richer company profile text.',
+                    enum: COMPANY_TYPES,
+                    description: 'Company type: startup, incumbent, platform, or niche vendor.',
                 },
                 strategic_action: {
                     type: 'string',
                     description: 'Strategic action to simulate.',
                 },
-                simulation_rounds: {
+                rounds: {
                     type: 'number',
                     description: 'Number of simulation rounds. Defaults to 4, max 12.',
                 },
-                rounds: {
-                    type: 'number',
-                    description: 'Alias for simulation_rounds.',
-                },
-                preset: {
-                    type: 'string',
-                    description: 'Built-in preset, such as ai_startup, saas_enterprise, consumer_tech, retail, manufacturing, or fintech.',
-                },
-                simulation_style: {
-                    type: 'string',
-                    description: 'Simulation style: conservative, base_case, aggressive, chaotic, winner_take_all, regulated, or capital_constrained.',
-                },
-                actors: {
-                    oneOf: [
-                        { type: 'string' },
-                        { type: 'array', items: { type: 'string' } },
-                    ],
-                    description: 'Comma-separated string or array of actor roles.',
-                },
-                market_dimensions: {
-                    oneOf: [
-                        { type: 'string' },
-                        { type: 'array', items: { type: 'string' } },
-                    ],
-                    description: 'Comma-separated string or array of market dimension names.',
-                },
-                action_dimensions: {
-                    oneOf: [
-                        { type: 'string' },
-                        { type: 'array', items: { type: 'string' } },
-                    ],
-                    description: 'Comma-separated string or array of action dimension names.',
-                },
-                shock_events: {
-                    oneOf: [
-                        { type: 'string' },
-                        { type: 'array', items: { type: 'string' } },
-                    ],
-                    description: 'Comma-separated string or array of shock events. Use name@round for explicit timing.',
-                },
                 objective: {
                     type: 'string',
-                    description: 'Company objective for the scenario, such as developer_adoption.',
+                    description: 'Company objective for the scenario. Defaults to market_share.',
                 },
-                report_format: {
+                industry: {
                     type: 'string',
-                    description: 'Narrative format: strategy_memo, founder_memo, investor_memo, board_update, risk_report, or product_brief.',
+                    description: 'Industry context for the scenario. Defaults to AI.',
+                },
+                level: {
+                    type: 'string',
+                    enum: ['light', 'medium', 'hard'],
+                    description: 'Simulation intensity: light, medium, or hard. Defaults to medium.',
                 },
             },
-            required: ['session_id', 'current_market', 'strategic_action'],
+            required: ['session_id', 'current_market', 'strategic_action', 'company_type'],
             additionalProperties: false,
         },
         execute: async (_callId, params) => {

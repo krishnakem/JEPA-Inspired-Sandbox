@@ -75,12 +75,26 @@ async function main(): Promise<void> {
     const run = await tool('run_market_simulation').execute('call-2', {
         session_id: startJson.session_id,
         current_market: 'AI coding assistants are growing and competitive',
-        company_type: 'startup',
         strategic_action: 'launch a free coding agent',
-        simulation_rounds: 2,
+        company_type: 'startup',
+        objective: 'developer_adoption',
+        industry: 'AI',
+        rounds: 2,
+        level: 'hard',
     });
     const runJson = JSON.parse(textPayload(run));
     assert(runJson.status === 'started', 'run_market_simulation did not start');
+
+    const runToolParams = tool('run_market_simulation').parameters;
+    assert(
+        Object.keys(runToolParams.properties).sort().join(',') ===
+            ['company_type', 'current_market', 'industry', 'level', 'objective', 'rounds', 'session_id', 'strategic_action'].join(','),
+        'run_market_simulation exposed unexpected parameters'
+    );
+    assert(
+        runToolParams.required?.join(',') === 'session_id,current_market,strategic_action,company_type',
+        'run_market_simulation required fields mismatch'
+    );
 
     let terminalStatus = '';
     let terminalPayload: any = null;

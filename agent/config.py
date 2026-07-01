@@ -45,6 +45,12 @@ SIMULATION_STYLES = {
     "capital_constrained",
 }
 
+LEVEL_TO_STYLE = {
+    "light": "conservative",
+    "medium": "base_case",
+    "hard": "aggressive",
+}
+
 REPORT_FORMATS = {
     "strategy_memo",
     "founder_memo",
