@@ -6,7 +6,7 @@ strategic market forecasting.
 ## Vision
 
 JEPA-Inspired Silicon Sandbox is a local market-vision forecasting MVP. A user
-describes a current market, a company profile, a strategic action, and a number
+describes a current market, a company type, a strategic action, and a number
 of rounds. The system rolls the market forward through company action,
 competitor response, customer reaction, and investor/regulator pressure, then
 returns a structured Market Vision report.
@@ -18,8 +18,7 @@ repeatable strategic scenario planning.
 ## What this project is
 
 - A local OpenClaw plugin for market scenario simulation.
-- A configurable numeric vector engine with default 8-dimension market state and
-  5-dimension action vectors.
+- A numeric market/action engine with fixed local defaults.
 - A Python-owned JEPA-inspired latent world model.
 - A deterministic report generator using templates, not hosted LLM prose.
 - An artifact-producing local workspace for reports, metrics, embeddings, and
@@ -77,7 +76,7 @@ Python engine
   agent/simulation.py
     multi-round market rollout
   agent/report.py
-    deterministic JSON/Markdown Market Vision reports
+    deterministic Market Vision reports
   agent/plot.py
     developer diagnostics
 
@@ -239,7 +238,6 @@ agent/artifacts/metrics.json
 agent/artifacts/embeddings.npy
 agent/artifacts/feature_spec.json
 agent/artifacts/simulations/market-vision-*.md
-agent/artifacts/simulations/market-vision-*.json
 agent/artifacts/plots/latent_trajectory.png
 agent/artifacts/plots/effective_rank.png
 agent/artifacts/plots/collapse_comparison.png
