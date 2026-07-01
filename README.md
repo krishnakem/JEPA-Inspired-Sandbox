@@ -192,7 +192,11 @@ Install this repo as a linked OpenClaw plugin:
 openclaw plugins install /absolute/path/to/JEPA-Inspired-Sandbox --link
 ```
 
-Canonical tool flow:
+Sandbox deployments should use the `market-vision` skill as the canonical run
+path. The skill invokes OpenClaw's sandboxed `exec` tool from `/workspace`, so it
+uses the sandbox image's shipped `python3` and does not require host Python.
+
+The plugin tool flow is a host-only development fallback:
 
 ```text
 start_session
@@ -218,19 +222,19 @@ Optional fields include `company_profile`, `preset`, `rounds`,
 `shock_events`, `objective`, and `report_format`. The runner writes a temporary
 config JSON, launches `python -m agent.simulation` locally, and returns the final
 Market Vision report path. It also includes diagnostic plot paths when they are
-available.
+available. Use it only when host-side Python execution is acceptable.
 
 ### Run on OpenClaw's shipped Python
 
 For sandbox deployments, build a custom OpenClaw sandbox image that starts from
 OpenClaw's shipped `python3` base and bakes in this repo's `requirements.txt`.
 Then merge the sandbox config snippet from [deploy/](deploy/) into the
-operator's `openclaw.json`.
+operator's `openclaw.json` and run simulations through
+[skills/market-vision/SKILL.md](skills/market-vision/SKILL.md).
 
 The sandbox path keeps `network: "none"` and trains `agent/artifacts/model.pt`
 with `setupCommand` when the container is first created. The existing
-`run_market_simulation` TypeScript runner still uses the host-spawn path in this
-stage.
+`run_market_simulation` TypeScript runner is intentionally host-only.
 
 ## Generated artifacts
 

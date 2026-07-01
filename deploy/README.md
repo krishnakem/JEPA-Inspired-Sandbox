@@ -12,6 +12,16 @@ docker build -t openclaw-sandbox-jepa:bookworm-slim -f deploy/Dockerfile.sandbox
 Merge `deploy/openclaw.sandbox.json5` into the operator's `openclaw.json`. The
 repo must be mounted as the sandbox workspace at `/workspace`.
 
+## Canonical Run Path (Skill)
+
+Use `skills/market-vision/SKILL.md` as the canonical OpenClaw run path. The
+skill invokes the sandboxed `exec` tool, which resolves to the active sandbox and
+runs the engine with the sandbox image's shipped `python3` from `/workspace`.
+
+The plugin tool `run_market_simulation` is host-only. It remains available as a
+local development fallback, but it spawns host-side Python and is not the
+sandbox deployment path.
+
 On first container create, `setupCommand` generates training data and trains
 `agent/artifacts/model.pt` inside `/workspace`:
 

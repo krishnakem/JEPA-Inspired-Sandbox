@@ -1,7 +1,7 @@
 {
   "id": "jepa-inspired-silicon-sandbox",
   "name": "JEPA-Inspired Silicon Sandbox",
-  "description": "Local market-vision simulations powered by a JEPA-inspired Python engine.",
+  "description": "Local market-vision simulations powered by a JEPA-inspired Python engine. Plugin tool runs host-side Python; for OpenClaw sandbox Python use the market-vision skill.",
   "version": "0.1.0",
   "kind": "capability",
   "main": "./src/plugin/index.ts",
