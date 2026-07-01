@@ -1,6 +1,6 @@
 {
-  "id": "jepa-inspired-silicon-sandbox",
-  "name": "JEPA-Inspired Silicon Sandbox",
+  "id": "jepa-silicon-sandbox",
+  "name": "JEPA Silicon Sandbox",
   "description": "Host-only local market-vision simulations powered by a JEPA-inspired Python engine and the local python3 runtime. Simulations run a fixed 4-round horizon.",
   "version": "0.1.0",
   "kind": "capability",
@@ -25,7 +25,7 @@
       "agentName": {
         "type": "string",
         "description": "Display name used by Market Vision reports.",
-        "default": "JEPA-Inspired Silicon Sandbox"
+        "default": "JEPA Silicon Sandbox"
       },
       "defaultDelayMs": {
         "type": "number",

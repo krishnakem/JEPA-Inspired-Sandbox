@@ -42,7 +42,7 @@ export function createAgentSession(opts: CreateAgentSessionOptions = {}): Create
         scratchDir,
         outputDir,
         runConfig: {
-            agentName: opts.runConfig?.agentName ?? 'JEPA-Inspired Silicon Sandbox',
+            agentName: opts.runConfig?.agentName ?? 'JEPA Silicon Sandbox',
             defaultDelayMs: opts.runConfig?.defaultDelayMs ?? 750,
         },
         events: new EventEmitter(),

@@ -1,5 +1,5 @@
 /**
- * JEPA-Inspired Silicon Sandbox OpenClaw plugin.
+ * JEPA Silicon Sandbox OpenClaw plugin.
  *
  * This file is the boundary between OpenClaw and your agent implementation.
  * Most plugin projects should only need to edit:
@@ -15,9 +15,9 @@ import path from 'node:path';
 
 import { createAgentSession } from '../core/AgentSession.js';
 import {
-    JepaInspiredSiliconSandboxRunner,
+    JepaSiliconSandboxRunner,
     type MarketSimulationInput,
-} from '../main/JepaInspiredSiliconSandboxRunner.js';
+} from '../main/JepaSiliconSandboxRunner.js';
 import { attachEventBuffer, createRegistry, type SessionEntry } from './session-registry.js';
 
 export interface AgentToolResult {
@@ -215,7 +215,7 @@ export function register(api: PluginApi): () => void {
                 scratchDir,
                 outputDir,
                 runConfig: {
-                    agentName: config.agentName ?? 'JEPA-Inspired Silicon Sandbox',
+                    agentName: config.agentName ?? 'JEPA Silicon Sandbox',
                     defaultDelayMs: config.defaultDelayMs ?? 750,
                 },
             });
@@ -240,7 +240,7 @@ export function register(api: PluginApi): () => void {
                 controller: runController,
             };
 
-            const runner = new JepaInspiredSiliconSandboxRunner(entry.session);
+            const runner = new JepaSiliconSandboxRunner(entry.session);
             void runner.run(input, runController.signal)
                 .then((result) => {
                     if (!entry.activeRun) return;
@@ -432,7 +432,7 @@ export function register(api: PluginApi): () => void {
     api.registerTool(resetAll);
     api.registerTool(endSession);
 
-    log.info('JEPA-Inspired Silicon Sandbox plugin registered', {
+    log.info('JEPA Silicon Sandbox plugin registered', {
         scratchDir,
         outputDir,
         tools: 5,
@@ -447,8 +447,8 @@ export function register(api: PluginApi): () => void {
 }
 
 export default {
-    id: 'jepa-inspired-silicon-sandbox',
-    name: 'JEPA-Inspired Silicon Sandbox',
+    id: 'jepa-silicon-sandbox',
+    name: 'JEPA Silicon Sandbox',
     description: 'Host-only local market-vision simulations powered by a JEPA-inspired Python engine with a fixed 4-round horizon.',
     kind: 'capability' as const,
     register,

@@ -36,7 +36,7 @@ function resolveRepoRoot(): string {
     }
 }
 
-export class JepaInspiredSiliconSandboxRunner implements AgentRunner<MarketSimulationInput> {
+export class JepaSiliconSandboxRunner implements AgentRunner<MarketSimulationInput> {
     private readonly repoRoot = resolveRepoRoot();
 
     constructor(private readonly session: AgentSession) {}

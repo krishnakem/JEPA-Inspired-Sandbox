@@ -1,11 +1,11 @@
-# JEPA-Inspired Silicon Sandbox
+# JEPA Silicon Sandbox
 
 A JEPA-inspired OpenClaw plugin exploring latent world models for multi-round
 strategic market forecasting.
 
 ## Vision
 
-JEPA-Inspired Silicon Sandbox is a local market-vision forecasting MVP. A user
+JEPA Silicon Sandbox is a local market-vision forecasting MVP. A user
 describes a current market, a company type, and a strategic action. The system
 rolls the market forward through four rounds of company action,
 competitor response, customer reaction, and investor/regulator pressure, then
@@ -63,7 +63,7 @@ That is JEPA-inspired, but intentionally small and local.
 OpenClaw / TypeScript
   src/plugin/index.ts
     marketsim_run_market_simulation, status, cancellation, reset
-  src/main/JepaInspiredSiliconSandboxRunner.ts
+  src/main/JepaSiliconSandboxRunner.ts
     spawns the local Python simulator and streams progress events
 
 Python engine
@@ -177,7 +177,7 @@ python3 -m agent.plot
 Install this repo as a linked OpenClaw plugin:
 
 ```bash
-openclaw plugins install /absolute/path/to/JEPA-Inspired-Sandbox --link
+openclaw plugins install /absolute/path/to/jepa-silicon-sandbox --link
 ```
 
 This is a host-only plugin. `marketsim_run_market_simulation` launches the

@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     };
 
     assert(typeof register === 'function', 'named register export is missing');
-    assert(pluginDefault.id === 'jepa-inspired-silicon-sandbox', 'default export id mismatch');
+    assert(pluginDefault.id === 'jepa-silicon-sandbox', 'default export id mismatch');
 
     const teardown = register(api);
     const expectedTools = [
