@@ -50,7 +50,6 @@ async function main(): Promise<void> {
 
     const teardown = register(api);
     const expectedTools = [
-        'marketsim_start_session',
         'marketsim_run_market_simulation',
         'marketsim_get_session_status',
         'marketsim_stop_run',
@@ -68,12 +67,7 @@ async function main(): Promise<void> {
         return found;
     };
 
-    const start = await tool('marketsim_start_session').execute('call-1', {});
-    const startJson = JSON.parse(textPayload(start));
-    assert(typeof startJson.session_id === 'string', 'marketsim_start_session missing session_id');
-
-    const run = await tool('marketsim_run_market_simulation').execute('call-2', {
-        session_id: startJson.session_id,
+    const run = await tool('marketsim_run_market_simulation').execute('call-1', {
         current_market: 'AI coding assistants are growing and competitive',
         strategic_action: 'launch a free coding agent',
         company_type: 'startup',
@@ -84,15 +78,16 @@ async function main(): Promise<void> {
     });
     const runJson = JSON.parse(textPayload(run));
     assert(runJson.status === 'started', 'marketsim_run_market_simulation did not start');
+    assert(typeof runJson.session_id === 'string', 'marketsim_run_market_simulation missing session_id');
 
     const runToolParams = tool('marketsim_run_market_simulation').parameters;
     assert(
         Object.keys(runToolParams.properties).sort().join(',') ===
-            ['company_type', 'current_market', 'industry', 'level', 'objective', 'rounds', 'session_id', 'strategic_action'].join(','),
+            ['company_type', 'current_market', 'industry', 'level', 'objective', 'rounds', 'strategic_action'].join(','),
         'marketsim_run_market_simulation exposed unexpected parameters'
     );
     assert(
-        runToolParams.required?.join(',') === 'session_id,current_market,strategic_action,company_type',
+        runToolParams.required?.join(',') === 'current_market,strategic_action,company_type',
         'marketsim_run_market_simulation required fields mismatch'
     );
 
@@ -100,8 +95,8 @@ async function main(): Promise<void> {
     let terminalPayload: any = null;
     for (let i = 0; i < 80; i++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
-        const status = await tool('marketsim_get_session_status').execute('call-3', {
-            session_id: startJson.session_id,
+        const status = await tool('marketsim_get_session_status').execute('call-2', {
+            session_id: runJson.session_id,
         });
         const statusJson = JSON.parse(textPayload(status));
         if (['completed', 'failed', 'stopped'].includes(statusJson.run_status)) {
@@ -122,8 +117,8 @@ async function main(): Promise<void> {
         'completed run did not write a markdown report'
     );
 
-    const end = await tool('marketsim_end_session').execute('call-4', {
-        session_id: startJson.session_id,
+    const end = await tool('marketsim_end_session').execute('call-3', {
+        session_id: runJson.session_id,
     });
     assert(textPayload(end) === 'Session ended.', 'marketsim_end_session response mismatch');
 

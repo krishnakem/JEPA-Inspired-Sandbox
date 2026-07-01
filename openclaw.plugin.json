@@ -1,13 +1,13 @@
 {
   "id": "jepa-inspired-silicon-sandbox",
   "name": "JEPA-Inspired Silicon Sandbox",
-  "description": "Local market-vision simulations powered by a JEPA-inspired Python engine. Plugin tool runs host-side Python; for OpenClaw sandbox Python use the market-vision skill.",
+  "description": "Host-only local market-vision simulations powered by a JEPA-inspired Python engine and the local python3 runtime.",
   "version": "0.1.0",
   "kind": "capability",
   "main": "./src/plugin/index.ts",
   "activation": { "onStartup": true },
   "contracts": {
-    "tools": ["marketsim_start_session", "marketsim_run_market_simulation", "marketsim_get_session_status", "marketsim_stop_run", "marketsim_reset_all", "marketsim_end_session"]
+    "tools": ["marketsim_run_market_simulation", "marketsim_get_session_status", "marketsim_stop_run", "marketsim_reset_all", "marketsim_end_session"]
   },
   "configSchema": {
     "type": "object",

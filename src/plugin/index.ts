@@ -172,55 +172,13 @@ export function register(api: PluginApi): () => void {
         error: (...a: unknown[]) => console.error('[jepa-silicon-sandbox]', ...a),
     };
 
-    const startSession: PluginTool = {
-        name: 'marketsim_start_session',
-        description:
-            'Create a new market simulation session. Always call this before marketsim_run_market_simulation. Returns a session_id used by every other tool.',
-        parameters: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-        },
-        execute: async () => {
-            const { session, controller } = createAgentSession({
-                scratchDir,
-                outputDir,
-                runConfig: {
-                    agentName: config.agentName ?? 'JEPA-Inspired Silicon Sandbox',
-                    defaultDelayMs: config.defaultDelayMs ?? 750,
-                },
-            });
-
-            const entry: SessionEntry = {
-                sessionId: session.id,
-                session,
-                controller,
-                events: [],
-                lastPhase: null,
-                createdAt: Date.now(),
-            };
-            attachEventBuffer(entry);
-            sessions.set(entry.sessionId, entry);
-
-            log.info('marketsim_start_session', { sessionId: entry.sessionId });
-            return jsonTextResult({
-                session_id: entry.sessionId,
-                message: 'Session started. Call marketsim_run_market_simulation with this session_id.',
-            });
-        },
-    };
-
     const runMarketSimulation: PluginTool = {
         name: 'marketsim_run_market_simulation',
         description:
-            'Start a local JEPA-inspired market simulation in the background. Poll marketsim_get_session_status for progress and the final Market Vision report.',
+            'Create a session and start a local JEPA-inspired market simulation in the background. Poll marketsim_get_session_status with the returned session_id for progress and the final Market Vision report.',
         parameters: {
             type: 'object',
             properties: {
-                session_id: {
-                    type: 'string',
-                    description: 'The id returned by marketsim_start_session.',
-                },
                 current_market: {
                     type: 'string',
                     description: 'Current market description to encode into the numeric market state.',
@@ -252,32 +210,38 @@ export function register(api: PluginApi): () => void {
                     description: 'Simulation intensity: light, medium, or hard. Defaults to medium.',
                 },
             },
-            required: ['session_id', 'current_market', 'strategic_action', 'company_type'],
+            required: ['current_market', 'strategic_action', 'company_type'],
             additionalProperties: false,
         },
         execute: async (_callId, params) => {
-            const sessionId = params.session_id;
-            if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('marketsim_run_market_simulation: session_id is required.', true);
-            }
-            const entry = sessions.get(sessionId);
-            if (!entry) {
-                return textResult(`marketsim_run_market_simulation: session_id ${sessionId} not found.`, true);
-            }
-            if (entry.activeRun?.status === 'running') {
-                return jsonTextResult({
-                    status: 'already_running',
-                    session_id: sessionId,
-                    started_at: new Date(entry.activeRun.startedAt).toISOString(),
-                });
-            }
-
             let input: MarketSimulationInput;
             try {
                 input = parseRunInput(params);
             } catch (err) {
                 return textResult(err instanceof Error ? err.message : String(err), true);
             }
+
+            const { session, controller } = createAgentSession({
+                scratchDir,
+                outputDir,
+                runConfig: {
+                    agentName: config.agentName ?? 'JEPA-Inspired Silicon Sandbox',
+                    defaultDelayMs: config.defaultDelayMs ?? 750,
+                },
+            });
+
+            const entry: SessionEntry = {
+                sessionId: session.id,
+                session,
+                controller,
+                events: [],
+                lastPhase: null,
+                createdAt: Date.now(),
+            };
+            attachEventBuffer(entry);
+            sessions.set(entry.sessionId, entry);
+            const sessionId = entry.sessionId;
+
             const runController = new AbortController();
             const startedAt = Date.now();
             entry.activeRun = {
@@ -324,7 +288,7 @@ export function register(api: PluginApi): () => void {
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by marketsim_start_session.',
+                    description: 'The id returned by marketsim_run_market_simulation.',
                 },
             },
             required: ['session_id'],
@@ -366,7 +330,7 @@ export function register(api: PluginApi): () => void {
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by marketsim_start_session.',
+                    description: 'The id returned by marketsim_run_market_simulation.',
                 },
             },
             required: ['session_id'],
@@ -450,7 +414,7 @@ export function register(api: PluginApi): () => void {
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by marketsim_start_session.',
+                    description: 'The id returned by marketsim_run_market_simulation.',
                 },
             },
             required: ['session_id'],
@@ -472,7 +436,6 @@ export function register(api: PluginApi): () => void {
         },
     };
 
-    api.registerTool(startSession);
     api.registerTool(runMarketSimulation);
     api.registerTool(getSessionStatus);
     api.registerTool(stopRun);
@@ -482,7 +445,7 @@ export function register(api: PluginApi): () => void {
     log.info('JEPA-Inspired Silicon Sandbox plugin registered', {
         scratchDir,
         outputDir,
-        tools: 6,
+        tools: 5,
     });
 
     return () => {
@@ -496,7 +459,7 @@ export function register(api: PluginApi): () => void {
 export default {
     id: 'jepa-inspired-silicon-sandbox',
     name: 'JEPA-Inspired Silicon Sandbox',
-    description: 'Local market-vision simulations powered by a JEPA-inspired Python engine.',
+    description: 'Host-only local market-vision simulations powered by a JEPA-inspired Python engine.',
     kind: 'capability' as const,
     register,
 };
