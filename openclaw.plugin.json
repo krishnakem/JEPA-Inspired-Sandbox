@@ -7,7 +7,7 @@
   "main": "./src/plugin/index.ts",
   "activation": { "onStartup": true },
   "contracts": {
-    "tools": ["start_session", "run_market_simulation", "get_session_status", "stop_run", "reset_all", "end_session"]
+    "tools": ["marketsim_start_session", "marketsim_run_market_simulation", "marketsim_get_session_status", "marketsim_stop_run", "marketsim_reset_all", "marketsim_end_session"]
   },
   "configSchema": {
     "type": "object",

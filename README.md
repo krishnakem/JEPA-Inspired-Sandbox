@@ -62,7 +62,8 @@ That is JEPA-inspired, but intentionally small and local.
 ```text
 OpenClaw / TypeScript
   src/plugin/index.ts
-    start_session, run_market_simulation, status, cancellation, reset
+    marketsim_start_session, marketsim_run_market_simulation, status,
+    cancellation, reset
   src/main/JepaInspiredSiliconSandboxRunner.ts
     spawns the local Python simulator and streams progress events
 
@@ -192,17 +193,17 @@ uses the sandbox image's shipped `python3` and does not require host Python.
 The plugin tool flow is a host-only development fallback:
 
 ```text
-start_session
-run_market_simulation
-get_session_status
-end_session
+marketsim_start_session
+marketsim_run_market_simulation
+marketsim_get_session_status
+marketsim_end_session
 ```
 
-`run_market_simulation` expects:
+`marketsim_run_market_simulation` expects:
 
 ```json
 {
-  "session_id": "session returned by start_session",
+  "session_id": "session returned by marketsim_start_session",
   "current_market": "AI coding assistants are rapidly growing and competitive",
   "strategic_action": "launch a free coding agent",
   "company_type": "startup",
@@ -229,7 +230,7 @@ operator's `openclaw.json` and run simulations through
 
 The sandbox path keeps `network: "none"` and trains `agent/artifacts/model.pt`
 with `setupCommand` when the container is first created. The existing
-`run_market_simulation` TypeScript runner is intentionally host-only.
+`marketsim_run_market_simulation` TypeScript runner is intentionally host-only.
 
 ## Generated artifacts
 

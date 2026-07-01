@@ -5,8 +5,8 @@
  * Most plugin projects should only need to edit:
  *
  * - Plugin identity in package.json / openclaw.plugin.json / default export
- * - Tool parameters for run_market_simulation
- * - The runner called from run_market_simulation
+ * - Tool parameters for marketsim_run_market_simulation
+ * - The runner called from marketsim_run_market_simulation
  */
 
 import fs from 'node:fs';
@@ -88,7 +88,7 @@ function asPositiveInteger(value: unknown, fallback: number, max: number): numbe
 function asRequiredString(params: Record<string, unknown>, key: string): string {
     const value = params[key];
     if (typeof value !== 'string' || !value.trim()) {
-        throw new Error(`run_market_simulation: ${key} is required.`);
+        throw new Error(`marketsim_run_market_simulation: ${key} is required.`);
     }
     return value.trim();
 }
@@ -107,7 +107,7 @@ function asRequiredEnum<T extends string>(
 ): T {
     const value = asRequiredString(params, key);
     if (!allowed.includes(value as T)) {
-        throw new Error(`run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
+        throw new Error(`marketsim_run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
     }
     return value as T;
 }
@@ -121,7 +121,7 @@ function asOptionalEnum<T extends string>(
     const value = asOptionalString(params, key);
     if (!value) return fallback;
     if (!allowed.includes(value as T)) {
-        throw new Error(`run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
+        throw new Error(`marketsim_run_market_simulation: ${key} must be one of: ${allowed.join(', ')}.`);
     }
     return value as T;
 }
@@ -173,9 +173,9 @@ export function register(api: PluginApi): () => void {
     };
 
     const startSession: PluginTool = {
-        name: 'start_session',
+        name: 'marketsim_start_session',
         description:
-            'Create a new market simulation session. Always call this before run_market_simulation. Returns a session_id used by every other tool.',
+            'Create a new market simulation session. Always call this before marketsim_run_market_simulation. Returns a session_id used by every other tool.',
         parameters: {
             type: 'object',
             properties: {},
@@ -202,24 +202,24 @@ export function register(api: PluginApi): () => void {
             attachEventBuffer(entry);
             sessions.set(entry.sessionId, entry);
 
-            log.info('start_session', { sessionId: entry.sessionId });
+            log.info('marketsim_start_session', { sessionId: entry.sessionId });
             return jsonTextResult({
                 session_id: entry.sessionId,
-                message: 'Session started. Call run_market_simulation with this session_id.',
+                message: 'Session started. Call marketsim_run_market_simulation with this session_id.',
             });
         },
     };
 
     const runMarketSimulation: PluginTool = {
-        name: 'run_market_simulation',
+        name: 'marketsim_run_market_simulation',
         description:
-            'Start a local JEPA-inspired market simulation in the background. Poll get_session_status for progress and the final Market Vision report.',
+            'Start a local JEPA-inspired market simulation in the background. Poll marketsim_get_session_status for progress and the final Market Vision report.',
         parameters: {
             type: 'object',
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by start_session.',
+                    description: 'The id returned by marketsim_start_session.',
                 },
                 current_market: {
                     type: 'string',
@@ -258,11 +258,11 @@ export function register(api: PluginApi): () => void {
         execute: async (_callId, params) => {
             const sessionId = params.session_id;
             if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('run_market_simulation: session_id is required.', true);
+                return textResult('marketsim_run_market_simulation: session_id is required.', true);
             }
             const entry = sessions.get(sessionId);
             if (!entry) {
-                return textResult(`run_market_simulation: session_id ${sessionId} not found.`, true);
+                return textResult(`marketsim_run_market_simulation: session_id ${sessionId} not found.`, true);
             }
             if (entry.activeRun?.status === 'running') {
                 return jsonTextResult({
@@ -292,14 +292,14 @@ export function register(api: PluginApi): () => void {
                     if (!entry.activeRun) return;
                     entry.activeRun.status = 'completed';
                     entry.activeRun.result = result;
-                    log.info('run_market_simulation completed', { sessionId, artifactPath: result.artifactPath });
+                    log.info('marketsim_run_market_simulation completed', { sessionId, artifactPath: result.artifactPath });
                 })
                 .catch((err) => {
                     if (!entry.activeRun) return;
                     const aborted = runController.signal.aborted || entry.controller.signal.aborted;
                     entry.activeRun.status = aborted ? 'stopped' : 'failed';
                     entry.activeRun.errorMessage = err instanceof Error ? err.message : String(err);
-                    log.warn('run_market_simulation ended', {
+                    log.warn('marketsim_run_market_simulation ended', {
                         sessionId,
                         status: entry.activeRun.status,
                         error: entry.activeRun.errorMessage,
@@ -310,13 +310,13 @@ export function register(api: PluginApi): () => void {
                 status: 'started',
                 session_id: sessionId,
                 started_at: new Date(startedAt).toISOString(),
-                message: 'Market simulation started in the background. Poll get_session_status for progress.',
+                message: 'Market simulation started in the background. Poll marketsim_get_session_status for progress.',
             });
         },
     };
 
     const getSessionStatus: PluginTool = {
-        name: 'get_session_status',
+        name: 'marketsim_get_session_status',
         description:
             'Return session lifecycle information, recent events, and the active run result when available.',
         parameters: {
@@ -324,7 +324,7 @@ export function register(api: PluginApi): () => void {
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by start_session.',
+                    description: 'The id returned by marketsim_start_session.',
                 },
             },
             required: ['session_id'],
@@ -333,11 +333,11 @@ export function register(api: PluginApi): () => void {
         execute: async (_callId, params) => {
             const sessionId = params.session_id;
             if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('get_session_status: session_id is required.', true);
+                return textResult('marketsim_get_session_status: session_id is required.', true);
             }
             const entry = sessions.get(sessionId);
             if (!entry) {
-                return textResult(`get_session_status: session_id ${sessionId} not found.`, true);
+                return textResult(`marketsim_get_session_status: session_id ${sessionId} not found.`, true);
             }
 
             const activeRun = entry.activeRun;
@@ -358,15 +358,15 @@ export function register(api: PluginApi): () => void {
     };
 
     const stopRun: PluginTool = {
-        name: 'stop_run',
+        name: 'marketsim_stop_run',
         description:
-            'Request cancellation of an in-flight run_market_simulation call. The runner receives an AbortSignal and should stop cooperatively.',
+            'Request cancellation of an in-flight marketsim_run_market_simulation call. The runner receives an AbortSignal and should stop cooperatively.',
         parameters: {
             type: 'object',
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by start_session.',
+                    description: 'The id returned by marketsim_start_session.',
                 },
             },
             required: ['session_id'],
@@ -375,11 +375,11 @@ export function register(api: PluginApi): () => void {
         execute: async (_callId, params) => {
             const sessionId = params.session_id;
             if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('stop_run: session_id is required.', true);
+                return textResult('marketsim_stop_run: session_id is required.', true);
             }
             const entry = sessions.get(sessionId);
             if (!entry) {
-                return textResult(`stop_run: session_id ${sessionId} not found.`, true);
+                return textResult(`marketsim_stop_run: session_id ${sessionId} not found.`, true);
             }
             if (!entry.activeRun || entry.activeRun.status !== 'running') {
                 return jsonTextResult({
@@ -394,13 +394,13 @@ export function register(api: PluginApi): () => void {
             return jsonTextResult({
                 status: 'stop_requested',
                 session_id: sessionId,
-                message: 'Stop requested. Poll get_session_status for the final stopped state.',
+                message: 'Stop requested. Poll marketsim_get_session_status for the final stopped state.',
             });
         },
     };
 
     const resetAll: PluginTool = {
-        name: 'reset_all',
+        name: 'marketsim_reset_all',
         description:
             'Factory reset for this plugin. Aborts sessions and deletes scratch/output directories. Call without confirm first for a dry-run preview.',
         parameters: {
@@ -421,7 +421,7 @@ export function register(api: PluginApi): () => void {
 
             if (params.confirm !== true) {
                 return textResult(
-                    'reset_all dry-run. Call again with { "confirm": true } to delete:\n\n' +
+                    'marketsim_reset_all dry-run. Call again with { "confirm": true } to delete:\n\n' +
                     targets.map((t) => `- ${t.label}: ${t.path}`).join('\n') +
                     `\n\nActive sessions that will be aborted: ${sessions.size}`
                 );
@@ -437,12 +437,12 @@ export function register(api: PluginApi): () => void {
                 fs.mkdirSync(target.path, { recursive: true });
             }
 
-            return textResult('reset_all complete. Scratch and output directories are empty.');
+            return textResult('marketsim_reset_all complete. Scratch and output directories are empty.');
         },
     };
 
     const endSession: PluginTool = {
-        name: 'end_session',
+        name: 'marketsim_end_session',
         description:
             'Abort any in-flight run and forget the session_id. Call when the user is done.',
         parameters: {
@@ -450,7 +450,7 @@ export function register(api: PluginApi): () => void {
             properties: {
                 session_id: {
                     type: 'string',
-                    description: 'The id returned by start_session.',
+                    description: 'The id returned by marketsim_start_session.',
                 },
             },
             required: ['session_id'],
@@ -459,11 +459,11 @@ export function register(api: PluginApi): () => void {
         execute: async (_callId, params) => {
             const sessionId = params.session_id;
             if (typeof sessionId !== 'string' || !sessionId) {
-                return textResult('end_session: session_id is required.', true);
+                return textResult('marketsim_end_session: session_id is required.', true);
             }
             const entry = sessions.get(sessionId);
             if (!entry) {
-                return textResult(`end_session: session_id ${sessionId} not found.`, true);
+                return textResult(`marketsim_end_session: session_id ${sessionId} not found.`, true);
             }
 
             await closeEntry(entry);
