@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "kind": "capability",
   "main": "./src/plugin/index.ts",
+  "activation": { "onStartup": true },
+  "contracts": {
+    "tools": ["start_session", "run_market_simulation", "get_session_status", "stop_run", "reset_all", "end_session"]
+  },
   "configSchema": {
     "type": "object",
     "properties": {
